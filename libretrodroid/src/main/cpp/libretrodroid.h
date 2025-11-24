@@ -133,6 +133,11 @@ public:
 
     void resetGlobalVariables();
 
+    // 获取当前FPS
+    float getCurrentFPS();
+    // 获取内容刷新率
+    float getContentRefreshRate();
+
     // Handle callbacks
     void handleVideoRefresh(const void *data, unsigned width, unsigned height, size_t pitch);
     size_t handleAudioCallback(const int16_t* data, size_t frames);

@@ -577,6 +577,22 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_refreshAsp
     LibretroDroid::getInstance().refreshAspectRatio();
 }
 
+// 获取当前FPS
+JNIEXPORT jfloat JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_getCurrentFPS(
+    JNIEnv* env,
+    jclass obj
+) {
+    return LibretroDroid::getInstance().getCurrentFPS();
+}
+
+// 获取内容刷新率
+JNIEXPORT jfloat JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_getContentRefreshRate(
+    JNIEnv* env,
+    jclass obj
+) {
+    return LibretroDroid::getInstance().getContentRefreshRate();
+}
+
 }
 
 }

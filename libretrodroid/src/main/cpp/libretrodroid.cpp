@@ -622,4 +622,24 @@ void LibretroDroid::setViewport(Rect viewportRect) {
     }
 }
 
+// 获取当前FPS(从libretro core)
+float LibretroDroid::getCurrentFPS() {
+    if (core) {
+        struct retro_system_av_info system_av_info {};
+        core->retro_get_system_av_info(&system_av_info);
+        return static_cast<float>(system_av_info.timing.fps);
+    }
+    return 0.0f;
+}
+
+// 获取内容刷新率(从libretro core)
+float LibretroDroid::getContentRefreshRate() {
+    if (core) {
+        struct retro_system_av_info system_av_info {};
+        core->retro_get_system_av_info(&system_av_info);
+        return static_cast<float>(system_av_info.timing.fps);
+    }
+    return 0.0f;
+}
+
 } //namespace libretrodroid

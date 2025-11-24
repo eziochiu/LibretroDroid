@@ -140,4 +140,7 @@ public class LibretroDroid {
 
     public static native Controller[][] getControllers();
     public static native void setControllerType(int port, int type);
+
+    public static native float getCurrentFPS();
+    public static native float getContentRefreshRate();
 }
