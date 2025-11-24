@@ -2,10 +2,10 @@ apply plugin: 'com.android.library'
 apply plugin: 'kotlin-android'
 apply plugin: 'maven-publish'
 
-group='com.github.Swordfish90'
+group='com.github.eziochiu'
 
 android {
-    namespace = "com.swordfish.libretrodroid"
+    namespace = "com.eziochiu.libretrodroid"
     compileSdkVersion 33
     buildToolsVersion "29.0.3"
 
@@ -51,7 +51,7 @@ android {
 publishing {
     publications {
         release(MavenPublication) {
-            groupId = 'com.swordfish'
+            groupId = 'com.eziochiu'
             artifactId = 'libretrodroid'
             afterEvaluate {
                 from components.release
