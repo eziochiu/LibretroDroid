@@ -212,6 +212,15 @@ class GLRetroView(
     fun getCurrentDisk() = runOnGLThread { LibretroDroid.currentDisk() }
     fun changeDisk(index: Int) = runOnGLThread { LibretroDroid.changeDisk(index) }
     fun getAspectRatio() = runOnGLThread { LibretroDroid.getAspectRatio() }
+    
+    /**
+     * Returns the relative bounds of the game content area within this view.
+     * @return RectF with (left, top, right, bottom) in relative coordinates (0.0-1.0)
+     */
+    fun getContentBounds(): RectF = runOnGLThread {
+        val bounds = LibretroDroid.getContentBounds()
+        RectF(bounds[0], bounds[1], bounds[2], bounds[3])
+    }
 
     private fun getGLESVersion(context: Context): Int {
         val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager

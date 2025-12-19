@@ -488,6 +488,13 @@ void LibretroDroid::refreshAspectRatio() {
     video->updateAspectRatio(getAspectRatio());
 }
 
+std::array<float, 4> LibretroDroid::getContentBounds() {
+    if (video) {
+        return video->getLayout().getRelativeForegroundBounds();
+    }
+    return {0.0f, 0.0f, 1.0f, 1.0f};
+}
+
 void LibretroDroid::setRumbleEnabled(bool enabled) {
     rumbleEnabled = enabled;
 }

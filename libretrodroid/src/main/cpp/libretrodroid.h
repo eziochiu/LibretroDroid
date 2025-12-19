@@ -108,6 +108,7 @@ public:
 
     void refreshAspectRatio();
     float getAspectRatio();
+    std::array<float, 4> getContentBounds();
 
     bool requiresVideoRefresh() const;
     void clearRequiresVideoRefresh();

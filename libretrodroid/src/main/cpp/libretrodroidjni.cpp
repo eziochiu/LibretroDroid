@@ -622,6 +622,17 @@ JNIEXPORT jfloat JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_getAspec
     return LibretroDroid::getInstance().getAspectRatio();
 }
 
+// 获取游戏内容渲染边界 [left, top, right, bottom] (相对坐标 0.0-1.0)
+JNIEXPORT jfloatArray JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_getContentBounds(
+    JNIEnv* env,
+    jclass obj
+) {
+    auto bounds = LibretroDroid::getInstance().getContentBounds();
+    jfloatArray result = env->NewFloatArray(4);
+    env->SetFloatArrayRegion(result, 0, 4, bounds.data());
+    return result;
+}
+
 }
 
 }
