@@ -211,6 +211,7 @@ class GLRetroView(
     fun getAvailableDisks() = runOnGLThread { LibretroDroid.availableDisks() }
     fun getCurrentDisk() = runOnGLThread { LibretroDroid.currentDisk() }
     fun changeDisk(index: Int) = runOnGLThread { LibretroDroid.changeDisk(index) }
+    fun getAspectRatio() = runOnGLThread { LibretroDroid.getAspectRatio() }
 
     private fun getGLESVersion(context: Context): Int {
         val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
