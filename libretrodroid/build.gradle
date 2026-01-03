@@ -22,7 +22,8 @@ android {
         externalNativeBuild {
             cmake {
                 // Available arguments are inside ${SDK}/cmake/.../android.toolchain.cmake file
-                arguments '-DANDROID_STL=c++_static'
+                // Use c++_shared for compatibility with cores like Flycast
+                arguments '-DANDROID_STL=c++_shared'
             }
         }
     }
