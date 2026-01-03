@@ -12,7 +12,7 @@ android {
 
     defaultConfig {
         minSdkVersion 21
-        targetSdkVersion 31
+        targetSdkVersion 28  // 降低到 28 以允许访问 /dev/ashmem (验证用)
         versionCode 1
         versionName "1.0"
 
