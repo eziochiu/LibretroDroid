@@ -159,6 +159,25 @@ void Video::renderFrame() {
     }
 
     updateProgram();
+    
+    if (renderer->rendersInVideoCallback()) {
+        glDisable(GL_DEPTH_TEST);
+        glDisable(GL_STENCIL_TEST);
+        glDisable(GL_SCISSOR_TEST);
+        glDisable(GL_CULL_FACE);
+        glDisable(GL_BLEND);
+        
+        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+        glDepthMask(GL_FALSE);
+        
+        glBlendFunc(GL_ONE, GL_ZERO);
+        
+        glBindVertexArray(0);
+        
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    }
+    
     for (int i = 0; i < shadersChain.size(); ++i) {
         auto shader = shadersChain[i];
         auto passData = renderer->getPassData(i);
@@ -184,7 +203,13 @@ void Video::renderFrame() {
         glEnableVertexAttribArray(shader.gvCoordinateHandle);
 
         glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, renderer->getTexture());
+        
+        GLuint inputTexture = renderer->getTexture();
+        if (i > 0 && passData.texture.has_value()) {
+            inputTexture = passData.texture.value();
+        }
+        glBindTexture(GL_TEXTURE_2D, inputTexture);
+        
         glUniform1i(shader.gTextureHandle, 0);
 
         if (shader.gPreviousPassTextureHandle != -1 && passData.texture.has_value()) {
