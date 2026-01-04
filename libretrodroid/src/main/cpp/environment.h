@@ -95,6 +95,7 @@ public:
     // 硬件渲染FBO尺寸（用于修复Flycast等核心的黑屏问题）
     unsigned int getHwRenderMaxWidth() const;
     unsigned int getHwRenderMaxHeight() const;
+    void setHwRenderMaxSize(unsigned int width, unsigned int height);
 
     float getScreenRotation() const;
     bool isScreenRotationUpdated() const;

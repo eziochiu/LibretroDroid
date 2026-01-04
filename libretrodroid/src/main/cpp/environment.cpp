@@ -151,9 +151,8 @@ bool Environment::environment_handle_set_hw_render(struct retro_hw_render_callba
     useStencil = hw_render_callback->stencil;
     bottomLeftOrigin = hw_render_callback->bottom_left_origin;
 
-    // 保存硬件渲染FBO尺寸（用于修复Flycast等核心的黑屏问题）
-    hwRenderMaxWidth = hw_render_callback->max_width;
-    hwRenderMaxHeight = hw_render_callback->max_height;
+    // 注意：FBO尺寸从retro_system_av_info获取，不在此结构体中
+    // hwRenderMaxWidth/Height将在onSurfaceCreated时从av_info设置
 
     hw_context_destroy = hw_render_callback->context_destroy;
     hw_context_reset = hw_render_callback->context_reset;
@@ -409,6 +408,11 @@ unsigned int Environment::getHwRenderMaxWidth() const {
 
 unsigned int Environment::getHwRenderMaxHeight() const {
     return hwRenderMaxHeight;
+}
+
+void Environment::setHwRenderMaxSize(unsigned int width, unsigned int height) {
+    hwRenderMaxWidth = width;
+    hwRenderMaxHeight = height;
 }
 
 float Environment::getScreenRotation() const {

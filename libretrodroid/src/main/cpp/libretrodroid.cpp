@@ -214,12 +214,21 @@ void LibretroDroid::onSurfaceCreated() {
     // 修复硬件渲染核心（如Flycast）的黑屏问题
     // 为硬件渲染核心创建专用FBO，软件渲染核心不受影响
     if (renderingOptions.hardwareAccelerated) {
-        // 使用核心请求的最大分辨率，如果未指定则使用默认值
-        unsigned int maxWidth = Environment::getInstance().getHwRenderMaxWidth();
-        unsigned int maxHeight = Environment::getInstance().getHwRenderMaxHeight();
+        // 从system_av_info获取FBO尺寸（libretro规范要求）
+        // 参考: "The size of this framebuffer will be at least as large as max_width/max_height provided in get_av_info()"
+        unsigned int fboWidth = system_av_info.geometry.max_width;
+        unsigned int fboHeight = system_av_info.geometry.max_height;
 
-        int fboWidth = (maxWidth > 0) ? maxWidth : 1920;
-        int fboHeight = (maxHeight > 0) ? maxHeight : 1080;
+        // 如果核心未指定max尺寸，使用base尺寸
+        if (fboWidth == 0) fboWidth = system_av_info.geometry.base_width;
+        if (fboHeight == 0) fboHeight = system_av_info.geometry.base_height;
+
+        // 如果仍然为0，使用合理默认值
+        if (fboWidth == 0) fboWidth = 1920;
+        if (fboHeight == 0) fboHeight = 1080;
+
+        // 保存尺寸到Environment以供后续使用
+        Environment::getInstance().setHwRenderMaxSize(fboWidth, fboHeight);
 
         LOGI("Hardware rendering detected, creating dedicated FBO: %dx%d", fboWidth, fboHeight);
         video->createHardwareRenderFBO(
