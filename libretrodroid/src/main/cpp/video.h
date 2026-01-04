@@ -78,12 +78,22 @@ public:
     void onNewFrame(const void *data, unsigned width, unsigned height, size_t pitch);
 
     uintptr_t getCurrentFramebuffer() {
+        // 硬件渲染模式：返回硬件渲染专用FBO
+        // 软件渲染模式：返回渲染器FBO（用于着色器链）
+        if (hwRenderFBO != 0) {
+            return hwRenderFBO;
+        }
         return renderer->getFramebuffer();
     };
 
     bool rendersInVideoCallback() {
         return renderer->rendersInVideoCallback();
     }
+
+    // 硬件渲染FBO管理
+    void createHardwareRenderFBO(int width, int height, bool needDepth, bool needStencil);
+    void destroyHardwareRenderFBO();
+    bool hasHardwareRenderFBO() { return hwRenderFBO != 0; }
 
 private:
     void updateProgram();
@@ -110,6 +120,13 @@ private:
     VideoLayout videoLayout;
 
     Renderer* renderer;
+
+    // 硬件渲染专用FBO（只在hardwareAccelerated=true时使用）
+    GLuint hwRenderFBO = 0;
+    GLuint hwRenderTexture = 0;
+    GLuint hwRenderDepthStencil = 0;
+    int hwRenderWidth = 0;
+    int hwRenderHeight = 0;
 };
 
 }
