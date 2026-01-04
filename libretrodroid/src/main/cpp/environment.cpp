@@ -151,9 +151,6 @@ bool Environment::environment_handle_set_hw_render(struct retro_hw_render_callba
     useStencil = hw_render_callback->stencil;
     bottomLeftOrigin = hw_render_callback->bottom_left_origin;
 
-    // 注意：FBO尺寸从retro_system_av_info获取，不在此结构体中
-    // hwRenderMaxWidth/Height将在onSurfaceCreated时从av_info设置
-
     hw_context_destroy = hw_render_callback->context_destroy;
     hw_context_reset = hw_render_callback->context_reset;
     hw_render_callback->get_current_framebuffer = callback_get_current_framebuffer;
@@ -400,19 +397,6 @@ bool Environment::isUseStencil() const {
 
 bool Environment::isBottomLeftOrigin() const {
     return bottomLeftOrigin;
-}
-
-unsigned int Environment::getHwRenderMaxWidth() const {
-    return hwRenderMaxWidth;
-}
-
-unsigned int Environment::getHwRenderMaxHeight() const {
-    return hwRenderMaxHeight;
-}
-
-void Environment::setHwRenderMaxSize(unsigned int width, unsigned int height) {
-    hwRenderMaxWidth = width;
-    hwRenderMaxHeight = height;
 }
 
 float Environment::getScreenRotation() const {

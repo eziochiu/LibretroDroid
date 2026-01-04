@@ -148,15 +148,13 @@ void Video::renderFrame() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     if (immersiveModeEnabled) {
-        // 硬件渲染模式使用hwRenderTexture，软件渲染使用renderer纹理
-        GLuint displayTexture = (hwRenderFBO != 0) ? hwRenderTexture : renderer->getTexture();
         immersiveMode.renderBackground(
             videoLayout.getScreenWidth(),
             videoLayout.getScreenHeight(),
             videoLayout.getBackgroundVertices(),
             videoLayout.getRelativeForegroundBounds(),
             videoLayout.getFramebufferVertices().data(),
-            displayTexture
+            renderer->getTexture()
         );
     }
 
@@ -186,8 +184,7 @@ void Video::renderFrame() {
         glEnableVertexAttribArray(shader.gvCoordinateHandle);
 
         glActiveTexture(GL_TEXTURE0);
-        GLuint sourceTexture = (hwRenderFBO != 0) ? hwRenderTexture : renderer->getTexture();
-        glBindTexture(GL_TEXTURE_2D, sourceTexture);
+        glBindTexture(GL_TEXTURE_2D, renderer->getTexture());
         glUniform1i(shader.gTextureHandle, 0);
 
         if (shader.gPreviousPassTextureHandle != -1 && passData.texture.has_value()) {
@@ -221,18 +218,10 @@ float Video::getScreenDensity() {
 }
 
 float Video::getTextureWidth() {
-    // 硬件渲染模式返回FBO尺寸，软件渲染返回实际帧尺寸
-    if (hwRenderFBO != 0 && hwRenderWidth > 0) {
-        return hwRenderWidth;
-    }
     return renderer->lastFrameSize.first;
 }
 
 float Video::getTextureHeight() {
-    // 硬件渲染模式返回FBO尺寸，软件渲染返回实际帧尺寸
-    if (hwRenderFBO != 0 && hwRenderHeight > 0) {
-        return hwRenderHeight;
-    }
     return renderer->lastFrameSize.second;
 }
 
@@ -320,87 +309,6 @@ void Video::initializeRenderer(RenderingOptions renderingOptions) {
 
 void Video::updateAspectRatio(float aspectRatio) {
     videoLayout.updateAspectRatio(aspectRatio);
-}
-
-// 硬件渲染FBO管理 - 修复Flycast等硬件渲染核心的黑屏问题
-void Video::createHardwareRenderFBO(int width, int height, bool needDepth, bool needStencil) {
-    // 如果已存在，先销毁
-    if (hwRenderFBO != 0) {
-        destroyHardwareRenderFBO();
-    }
-
-    hwRenderWidth = width;
-    hwRenderHeight = height;
-
-    LOGI("Creating hardware render FBO: %dx%d (depth=%d, stencil=%d)", width, height, needDepth, needStencil);
-
-    // 创建纹理
-    glGenTextures(1, &hwRenderTexture);
-    glBindTexture(GL_TEXTURE_2D, hwRenderTexture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glBindTexture(GL_TEXTURE_2D, 0);
-
-    // 创建FBO
-    glGenFramebuffers(1, &hwRenderFBO);
-    glBindFramebuffer(GL_FRAMEBUFFER, hwRenderFBO);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, hwRenderTexture, 0);
-
-    // 创建深度/模板缓冲（如果需要）
-    if (needDepth || needStencil) {
-        glGenRenderbuffers(1, &hwRenderDepthStencil);
-        glBindRenderbuffer(GL_RENDERBUFFER, hwRenderDepthStencil);
-
-        GLenum format = GL_DEPTH24_STENCIL8;
-        if (needDepth && !needStencil) format = GL_DEPTH_COMPONENT16;
-        if (!needDepth && needStencil) format = GL_STENCIL_INDEX8;
-
-        glRenderbufferStorage(GL_RENDERBUFFER, format, width, height);
-
-        if (needDepth) {
-            glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, hwRenderDepthStencil);
-        }
-        if (needStencil) {
-            glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_RENDERBUFFER, hwRenderDepthStencil);
-        }
-
-        glBindRenderbuffer(GL_RENDERBUFFER, 0);
-    }
-
-    // 检查FBO完整性
-    GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
-    if (status != GL_FRAMEBUFFER_COMPLETE) {
-        LOGE("Hardware render FBO creation failed: 0x%x", status);
-        destroyHardwareRenderFBO();
-    } else {
-        LOGI("Hardware render FBO created successfully: ID=%u", hwRenderFBO);
-    }
-
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-}
-
-void Video::destroyHardwareRenderFBO() {
-    if (hwRenderFBO != 0) {
-        LOGI("Destroying hardware render FBO: ID=%u", hwRenderFBO);
-        glDeleteFramebuffers(1, &hwRenderFBO);
-        hwRenderFBO = 0;
-    }
-
-    if (hwRenderTexture != 0) {
-        glDeleteTextures(1, &hwRenderTexture);
-        hwRenderTexture = 0;
-    }
-
-    if (hwRenderDepthStencil != 0) {
-        glDeleteRenderbuffers(1, &hwRenderDepthStencil);
-        hwRenderDepthStencil = 0;
-    }
-
-    hwRenderWidth = 0;
-    hwRenderHeight = 0;
 }
 
 } //namespace libretrodroid
