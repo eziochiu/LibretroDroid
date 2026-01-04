@@ -211,23 +211,6 @@ void LibretroDroid::onSurfaceCreated() {
 
     video = std::unique_ptr<Video>(newVideo);
 
-    if (renderingOptions.hardwareAccelerated) {
-        auto hwContext = Environment::getInstance().getHwContext();
-        if (hwContext != nullptr && hwContext->context_type != RETRO_HW_CONTEXT_NONE) {
-            // 使用核心请求的最大分辨率，如果未指定则使用默认值
-            int fboWidth = hwContext->max_width > 0 ? hwContext->max_width : 1920;
-            int fboHeight = hwContext->max_height > 0 ? hwContext->max_height : 1080;
-
-            LOGI("Hardware rendering detected, creating dedicated FBO: %dx%d", fboWidth, fboHeight);
-            video->createHardwareRenderFBO(
-                fboWidth,
-                fboHeight,
-                renderingOptions.useDepth,
-                renderingOptions.useStencil
-            );
-        }
-    }
-
     if (Environment::getInstance().getHwContextReset() != nullptr) {
         Environment::getInstance().getHwContextReset()();
     }
