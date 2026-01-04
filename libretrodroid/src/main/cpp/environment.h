@@ -92,6 +92,10 @@ public:
     bool isUseStencil() const;
     bool isBottomLeftOrigin() const;
 
+    // 硬件渲染FBO尺寸（用于修复Flycast等核心的黑屏问题）
+    unsigned int getHwRenderMaxWidth() const;
+    unsigned int getHwRenderMaxHeight() const;
+
     float getScreenRotation() const;
     bool isScreenRotationUpdated() const;
     void clearScreenRotationUpdated();
@@ -133,6 +137,10 @@ private:
     bool useDepth = false;
     bool useStencil = false;
     bool bottomLeftOrigin = false;
+
+    // 硬件渲染FBO尺寸
+    unsigned int hwRenderMaxWidth = 0;
+    unsigned int hwRenderMaxHeight = 0;
 
     float screenRotation = 0;
     bool screenRotationUpdated = false;
