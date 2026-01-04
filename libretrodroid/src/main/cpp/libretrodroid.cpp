@@ -554,7 +554,12 @@ void LibretroDroid::handleVideoRefresh(
     size_t pitch
 ) {
     if (video) {
-        video->onNewFrame(data, width, height, pitch);
+        // 硬件渲染模式：data == RETRO_HW_FRAME_BUFFER_VALID (-1)
+        // 核心已经直接渲染到FBO，不需要传递帧数据
+        if (data != RETRO_HW_FRAME_BUFFER_VALID) {
+            // 软件渲染模式：传递CPU端的帧数据
+            video->onNewFrame(data, width, height, pitch);
+        }
 
         if (video->rendersInVideoCallback()) {
             video->renderFrame();
