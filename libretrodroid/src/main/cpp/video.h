@@ -77,6 +77,9 @@ public:
 
     void onNewFrame(const void *data, unsigned width, unsigned height, size_t pitch);
 
+    // 标记有新帧需要渲染（用于硬件渲染模式）
+    void markFrameDirty() { isDirty = true; }
+
     uintptr_t getCurrentFramebuffer() {
         // 硬件渲染模式：返回硬件渲染专用FBO
         // 软件渲染模式：返回渲染器FBO（用于着色器链）

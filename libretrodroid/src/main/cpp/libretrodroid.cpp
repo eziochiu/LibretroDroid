@@ -559,6 +559,9 @@ void LibretroDroid::handleVideoRefresh(
         if (data != RETRO_HW_FRAME_BUFFER_VALID) {
             // 软件渲染模式：传递CPU端的帧数据
             video->onNewFrame(data, width, height, pitch);
+        } else {
+            // 硬件渲染模式：标记有新帧需要渲染
+            video->markFrameDirty();
         }
 
         if (video->rendersInVideoCallback()) {
