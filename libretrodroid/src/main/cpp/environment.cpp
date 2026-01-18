@@ -327,6 +327,13 @@ bool Environment::handle_callback_environment(unsigned cmd, void *data) {
             *((unsigned*) data) = language;
             return true;
 
+        // 解决 Flycast 等核心运行过快的问题
+        // 当核心查询是否处于快进模式时，返回 false 表示正常速度运行
+        case RETRO_ENVIRONMENT_GET_FASTFORWARDING:
+            LOGD("Called RETRO_ENVIRONMENT_GET_FASTFORWARDING");
+            *((bool*) data) = false;
+            return true;
+
         case RETRO_ENVIRONMENT_GET_VFS_INTERFACE:
             LOGD("Called RETRO_ENVIRONMENT_GET_VFS_INTERFACE");
             return environment_handle_get_vfs_interface(static_cast<struct retro_vfs_interface_info*>(data));
