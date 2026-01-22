@@ -214,6 +214,15 @@ class GLRetroView(
     fun getAspectRatio() = runOnGLThread { LibretroDroid.getAspectRatio() }
     
     /**
+     * 启用或禁用 AudioSync 功能
+     * AudioSync 通过音频阻塞来限制模拟器速度，适用于 Flycast 等运行过快的核心
+     */
+    fun setAudioSyncEnabled(enabled: Boolean) = runOnGLThread {
+        LibretroDroid.setAudioSyncEnabled(enabled)
+    }
+
+    
+    /**
      * Returns the relative bounds of the game content area within this view.
      * @return RectF with (left, top, right, bottom) in relative coordinates (0.0-1.0)
      */
