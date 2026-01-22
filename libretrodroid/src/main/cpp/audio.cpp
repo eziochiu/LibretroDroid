@@ -98,7 +98,26 @@ void Audio::stop() {
 }
 
 void Audio::write(const int16_t *data, size_t frames) {
+    if (audioSyncEnabled) {
+        waitForSpace(frames * 2);
+    }
     fifoBuffer->write(data, frames * 2);
+}
+
+void Audio::waitForSpace(size_t neededSamples) {
+    std::unique_lock<std::mutex> lock(bufferMutex);
+    bufferCondition.wait_for(lock, std::chrono::milliseconds(100), [this, neededSamples] {
+        int32_t capacity = fifoBuffer->getBufferCapacityInFrames() * 2;
+        int32_t available = fifoBuffer->getFullFramesAvailable() * 2;
+        int32_t freeSpace = capacity - available;
+        
+        return freeSpace >= (int32_t)neededSamples && (available * 100 / capacity) < 75;
+    });
+}
+
+void Audio::setAudioSyncEnabled(bool enabled) {
+    audioSyncEnabled = enabled;
+    LOGI("AudioSync %s", enabled ? "enabled" : "disabled");
 }
 
 void Audio::setPlaybackSpeed(const double newPlaybackSpeed) {
@@ -121,6 +140,11 @@ oboe::DataCallbackResult Audio::onAudioReady(oboe::AudioStream *oboeStream, void
     resampler.resample(temporaryAudioBuffer.get(), currentFramesToSubmit, outputArray, numFrames);
 
     latencyTuner->tune();
+
+    // 通知可能在等待的写入线程：缓冲区有空间了
+    if (audioSyncEnabled) {
+        bufferCondition.notify_one();
+    }
 
     return oboe::DataCallbackResult::Continue;
 }

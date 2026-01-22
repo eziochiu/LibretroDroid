@@ -512,6 +512,14 @@ void LibretroDroid::setAudioEnabled(bool enabled) {
     audioEnabled = enabled;
 }
 
+void LibretroDroid::setAudioSyncEnabled(bool enabled) {
+    audioSyncEnabled = enabled;
+    if (audio) {
+        audio->setAudioSyncEnabled(enabled);
+    }
+    LOGI("LibretroDroid: AudioSync %s", enabled ? "enabled" : "disabled");
+}
+
 void LibretroDroid::setShaderConfig(ShaderManager::Config shaderConfig) {
     fragmentShaderConfig = std::move(shaderConfig);
     if (video) {
@@ -602,6 +610,9 @@ void LibretroDroid::afterGameLoad() {
         system_av_info.timing.fps,
         preferLowLatencyAudio
     );
+
+    // 应用 AudioSync 配置
+    audio->setAudioSyncEnabled(audioSyncEnabled);
 
     updateAudioSampleRateMultiplier();
 

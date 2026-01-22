@@ -131,6 +131,8 @@ public:
 
     void setAudioEnabled(bool enabled);
 
+    void setAudioSyncEnabled(bool enabled);
+
     void setShaderConfig(ShaderManager::Config shaderConfig);
 
     void resetGlobalVariables();
@@ -162,6 +164,7 @@ protected:
 private:
     unsigned int frameSpeed = 1;
     bool audioEnabled = true;
+    bool audioSyncEnabled = true;  // AudioSync 默认启用
     bool preferLowLatencyAudio = false;
     bool rumbleEnabled = false;
 

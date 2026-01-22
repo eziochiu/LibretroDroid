@@ -22,6 +22,8 @@
 #include <unistd.h>
 #include <oboe/Oboe.h>
 #include <oboe/FifoBuffer.h>
+#include <mutex>
+#include <condition_variable>
 
 #include "resamplers/linearresampler.h"
 
@@ -54,6 +56,8 @@ public:
 
 public:
     void write(const int16_t *data, size_t frames);
+    void waitForSpace(size_t frames);
+    void setAudioSyncEnabled(bool enabled);
     void setPlaybackSpeed(const double newPlaybackSpeed);
 
 private:
@@ -89,6 +93,11 @@ private:
     double playbackSpeed = 1.0;
 
     std::unique_ptr<AudioLatencySettings> audioLatencySettings;
+
+    // AudioSync 支持
+    std::mutex bufferMutex;
+    std::condition_variable bufferCondition;
+    bool audioSyncEnabled = true;
 };
 
 } // namespace libretrodroid
