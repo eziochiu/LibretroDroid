@@ -46,18 +46,20 @@ void VideoLayout::updateForegroundVertices() {
         rotation
     );
 
-    float screenW = screenWidth * viewportRect.getWidth();
-    float screenH = screenHeight * viewportRect.getHeight();
-    float screenAspect = screenW / screenH;
-    float contentAspect = aspectRatio;
+    // 移除宽高比保持逻辑，让画面铺满整个屏幕
+    // float screenW = screenWidth * viewportRect.getWidth();
+    // float screenH = screenHeight * viewportRect.getHeight();
+    // float screenAspect = screenW / screenH;
+    // float contentAspect = aspectRatio;
 
     float scaleX = viewportRect.getWidth();
     float scaleY = viewportRect.getHeight();
-    if (contentAspect > screenAspect) {
-        scaleY *= screenAspect / contentAspect;
-    } else {
-        scaleX *= contentAspect / screenAspect;
-    }
+    // 注释掉原有的比例保持逻辑，直接使用viewport尺寸铺满屏幕
+    // if (contentAspect > screenAspect) {
+    //     scaleY *= screenAspect / contentAspect;
+    // } else {
+    //     scaleX *= contentAspect / screenAspect;
+    // }
 
     float viewportXOffset = (viewportRect.getX() * 2.0f) - (1.0F - viewportRect.getWidth());
     float viewportYOffset = (viewportRect.getY() * 2.0f) - (1.0F - viewportRect.getHeight());
