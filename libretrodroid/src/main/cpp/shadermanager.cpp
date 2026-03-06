@@ -39,7 +39,7 @@ const std::string ShaderManager::defaultShaderVertex =
     "void main() {\n"
     "  coords = vCoordinate;\n"
     "  screenCoords = coords * textureSize;\n"
-    "  screenMaskStrength = smoothstep(2.0, 6.0, screenDensity);\n"
+    "  screenMaskStrength = 1.0;\n"
     "  gl_Position = vPosition;\n"
     "}\n";
 
