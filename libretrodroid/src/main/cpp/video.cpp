@@ -202,14 +202,12 @@ void Video::renderFrame() {
         glVertexAttribPointer(shader.gvCoordinateHandle, 2, GL_FLOAT, GL_FALSE, 0, coordinates.data());
         glEnableVertexAttribArray(shader.gvCoordinateHandle);
 
+        // `texture` must always be the original game frame so CUT2/CUT3 Pass1
+        // can sample pixel colors correctly. `previousPass` (below) carries the
+        // prior pass edge-detection data. The Flycast black-screen fix is the
+        // GL state reset block above — NOT this texture binding.
         glActiveTexture(GL_TEXTURE0);
-        
-        GLuint inputTexture = renderer->getTexture();
-        if (i > 0 && passData.texture.has_value()) {
-            inputTexture = passData.texture.value();
-        }
-        glBindTexture(GL_TEXTURE_2D, inputTexture);
-        
+        glBindTexture(GL_TEXTURE_2D, renderer->getTexture());
         glUniform1i(shader.gTextureHandle, 0);
 
         if (shader.gPreviousPassTextureHandle != -1 && passData.texture.has_value()) {
