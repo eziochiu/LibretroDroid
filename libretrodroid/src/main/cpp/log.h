@@ -45,8 +45,8 @@
 #define LOGD(...)
 #define LOGI(...)
 #define LOGW(...)
-#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, MODULE_NAME, __VA_ARGS__)
-#define LOGF(...) __android_log_print(ANDROID_LOG_FATAL, MODULE_NAME, __VA_ARGS__)
+#define LOGE(...)
+#define LOGF(...)
 
 #endif
 
