@@ -18,6 +18,7 @@
 #include "log.h"
 
 #include "audio.h"
+#include <android/log.h>
 #include <cmath>
 #include <memory>
 
@@ -56,6 +57,16 @@ bool Audio::initializeStream() {
         fifoBuffer = std::make_unique<oboe::FifoBuffer>(2, audioBufferSize);
         temporaryAudioBuffer = std::unique_ptr<int16_t[]>(new int16_t[audioBufferSize]);
         latencyTuner = std::make_unique<oboe::LatencyTuner>(*stream);
+        maybeLogDiagnosticsLocked(
+            "init",
+            -1,
+            -1,
+            -1,
+            -1,
+            stream->getFramesPerBurst(),
+            1.0,
+            true
+        );
         return true;
     } else {
         LOGE("Failed to create stream. Error: %s", oboe::convertToText(result));
@@ -98,10 +109,25 @@ void Audio::stop() {
 }
 
 void Audio::write(const int16_t *data, size_t frames) {
+    int32_t fifoFramesRequested = static_cast<int32_t>(frames * 2);
     if (audioSyncEnabled) {
-        waitForSpace(frames * 2);
+        waitForSpace(fifoFramesRequested);
     }
-    fifoBuffer->write(data, frames * 2);
+    int32_t fifoFramesWritten = fifoBuffer->write(data, fifoFramesRequested);
+
+    std::lock_guard<std::mutex> lock(diagnosticsMutex);
+    totalWriteCalls++;
+    totalWriteFramesRequested += fifoFramesRequested;
+    totalWriteFramesAccepted += std::max(fifoFramesWritten, 0);
+    maybeLogDiagnosticsLocked(
+        "write",
+        fifoFramesRequested,
+        fifoFramesWritten,
+        -1,
+        -1,
+        -1,
+        -1.0
+    );
 }
 
 void Audio::waitForSpace(size_t neededSamples) {
@@ -134,10 +160,27 @@ oboe::DataCallbackResult Audio::onAudioReady(oboe::AudioStream *oboeStream, void
     int32_t currentFramesToSubmit = std::round(framesToSubmit);
     framesToSubmit -= currentFramesToSubmit;
 
-    fifoBuffer->readNow(temporaryAudioBuffer.get(), currentFramesToSubmit * 2);
+    int32_t fifoFramesRequested = currentFramesToSubmit * 2;
+    int32_t fifoFramesRead = fifoBuffer->readNow(temporaryAudioBuffer.get(), fifoFramesRequested);
 
     auto outputArray = reinterpret_cast<int16_t *>(audioData);
     resampler.resample(temporaryAudioBuffer.get(), currentFramesToSubmit, outputArray, numFrames);
+
+    {
+        std::lock_guard<std::mutex> lock(diagnosticsMutex);
+        totalReadCallbacks++;
+        totalReadFramesRequested += std::max(fifoFramesRequested, 0);
+        totalReadFramesActual += std::max(fifoFramesRead, 0);
+        maybeLogDiagnosticsLocked(
+            "callback",
+            -1,
+            -1,
+            fifoFramesRequested,
+            fifoFramesRead,
+            numFrames,
+            dynamicBufferFactor
+        );
+    }
 
     latencyTuner->tune();
 
@@ -173,6 +216,70 @@ double Audio::computeDynamicBufferConversionFactor(double dt) {
     LOGD("Audio speed adjustments (p: %f) (i: %f)", proportionalAdjustment, integralAdjustment);
 
     return 1.0 - (finalAdjustment);
+}
+
+void Audio::maybeLogDiagnosticsLocked(
+    const char* event,
+    int32_t writeRequestedFrames,
+    int32_t writeAcceptedFrames,
+    int32_t readRequestedFrames,
+    int32_t readActualFrames,
+    int32_t outputFrames,
+    double dynamicBufferFactor,
+    bool force
+) {
+    auto now = DiagnosticClock::now();
+    bool partialWrite =
+        writeRequestedFrames >= 0 &&
+        writeAcceptedFrames >= 0 &&
+        writeAcceptedFrames < writeRequestedFrames;
+    bool underrun =
+        readRequestedFrames >= 0 &&
+        readActualFrames >= 0 &&
+        readActualFrames < readRequestedFrames;
+    bool periodic =
+        lastDiagnosticsLogTime == DiagnosticClock::time_point::min() ||
+        now - lastDiagnosticsLogTime >= std::chrono::seconds(1);
+
+    if (!force && !partialWrite && !underrun && !periodic) {
+        return;
+    }
+
+    lastDiagnosticsLogTime = now;
+
+    uint32_t fifoCapacity = fifoBuffer ? fifoBuffer->getBufferCapacityInFrames() : 0;
+    uint32_t fifoAvailable = fifoBuffer ? fifoBuffer->getFullFramesAvailable() : 0;
+    int32_t streamSampleRate = stream ? stream->getSampleRate() : 0;
+    int32_t framesPerBurst = stream ? stream->getFramesPerBurst() : 0;
+
+    __android_log_print(
+        ANDROID_LOG_INFO,
+        MODULE_NAME,
+        "AudioDiag[%s]: inputRate=%d streamRate=%d contentFps=%.3f baseFactor=%.6f dynFactor=%.6f playback=%.3f "
+        "fifo=%u/%u framesPerBurst=%d writeReq=%d writeOk=%d readReq=%d readOk=%d outFrames=%d "
+        "totals(writeCalls=%llu writeReq=%llu writeOk=%llu readCallbacks=%llu readReq=%llu readOk=%llu)",
+        event,
+        inputSampleRate,
+        streamSampleRate,
+        contentRefreshRate,
+        baseConversionFactor,
+        dynamicBufferFactor,
+        playbackSpeed,
+        fifoAvailable,
+        fifoCapacity,
+        framesPerBurst,
+        writeRequestedFrames,
+        writeAcceptedFrames,
+        readRequestedFrames,
+        readActualFrames,
+        outputFrames,
+        static_cast<unsigned long long>(totalWriteCalls),
+        static_cast<unsigned long long>(totalWriteFramesRequested),
+        static_cast<unsigned long long>(totalWriteFramesAccepted),
+        static_cast<unsigned long long>(totalReadCallbacks),
+        static_cast<unsigned long long>(totalReadFramesRequested),
+        static_cast<unsigned long long>(totalReadFramesActual)
+    );
 }
 
 int32_t Audio::roundToEven(int32_t x) {

@@ -19,6 +19,7 @@
 #define LIBRETRODROID_AUDIO_H
 
 #include <array>
+#include <chrono>
 #include <unistd.h>
 #include <oboe/Oboe.h>
 #include <oboe/FifoBuffer.h>
@@ -67,6 +68,16 @@ private:
     bool initializeStream();
     std::unique_ptr<Audio::AudioLatencySettings> findBestLatencySettings(bool preferLowLatencyAudio);
     double computeMaximumLatency() const;
+    void maybeLogDiagnosticsLocked(
+        const char* event,
+        int32_t writeRequestedFrames,
+        int32_t writeAcceptedFrames,
+        int32_t readRequestedFrames,
+        int32_t readActualFrames,
+        int32_t outputFrames,
+        double dynamicBufferFactor,
+        bool force = false
+    );
 
 private:
     const double kp = 0.006;
@@ -98,6 +109,16 @@ private:
     std::mutex bufferMutex;
     std::condition_variable bufferCondition;
     bool audioSyncEnabled = true;
+
+    using DiagnosticClock = std::chrono::steady_clock;
+    std::mutex diagnosticsMutex;
+    DiagnosticClock::time_point lastDiagnosticsLogTime = DiagnosticClock::time_point::min();
+    uint64_t totalWriteFramesRequested = 0;
+    uint64_t totalWriteFramesAccepted = 0;
+    uint64_t totalReadFramesRequested = 0;
+    uint64_t totalReadFramesActual = 0;
+    uint64_t totalWriteCalls = 0;
+    uint64_t totalReadCallbacks = 0;
 };
 
 } // namespace libretrodroid
