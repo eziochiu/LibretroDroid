@@ -84,8 +84,6 @@ private:
     const double ki = 0.00002;
     const double maxp = 0.003;
     const double maxi = 0.02;
-    const double targetBufferFillRatio = 0.70;
-    const double maxBufferFillRatioForWrite = 0.90;
 
     LinearResampler resampler;
     std::unique_ptr<oboe::FifoBuffer> fifoBuffer = nullptr;

@@ -546,7 +546,7 @@ void LibretroDroid::step() {
         requestedFrames = fpsSync->advanceFrames();
 
         // If the application runs too slow it's better to just skip those frames.
-        frames = std::min(requestedFrames, 1u);
+        frames = std::min(requestedFrames, 2u);
     }
 
     auto retroRunStart = PerformanceClock::now();
