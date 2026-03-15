@@ -136,8 +136,9 @@ void Audio::waitForSpace(size_t neededSamples) {
         int32_t capacity = fifoBuffer->getBufferCapacityInFrames() * 2;
         int32_t available = fifoBuffer->getFullFramesAvailable() * 2;
         int32_t freeSpace = capacity - available;
-        
-        return freeSpace >= (int32_t)neededSamples && (available * 100 / capacity) < 75;
+
+        return freeSpace >= (int32_t)neededSamples &&
+               static_cast<double>(available) < static_cast<double>(capacity) * maxBufferFillRatioForWrite;
     });
 }
 
@@ -151,7 +152,11 @@ void Audio::setPlaybackSpeed(const double newPlaybackSpeed) {
 }
 
 oboe::DataCallbackResult Audio::onAudioReady(oboe::AudioStream *oboeStream, void *audioData, int32_t numFrames) {
-    double dynamicBufferFactor = computeDynamicBufferConversionFactor(0.001 * numFrames);
+    double callbackDurationSeconds =
+        oboeStream != nullptr && oboeStream->getSampleRate() > 0
+            ? static_cast<double>(numFrames) / static_cast<double>(oboeStream->getSampleRate())
+            : 0.0;
+    double dynamicBufferFactor = computeDynamicBufferConversionFactor(callbackDurationSeconds);
     double finalConversionFactor = baseConversionFactor * dynamicBufferFactor * playbackSpeed;
 
     // When using low-latency stream, numFrames is very low (~100) and the dynamic buffer scaling doesn't work with rounding.
@@ -198,8 +203,9 @@ double Audio::computeDynamicBufferConversionFactor(double dt) {
     double framesCapacityInBuffer = fifoBuffer->getBufferCapacityInFrames();
     double framesAvailableInBuffer = fifoBuffer->getFullFramesAvailable();
 
-    // Error is represented by normalized distance to half buffer utilization. Range [-1.0, 1.0]
-    double errorMeasure = (framesCapacityInBuffer - 2.0f * framesAvailableInBuffer) / framesCapacityInBuffer;
+    // Bias the controller toward a fuller FIFO so short retro_run stalls do not immediately crackle.
+    double targetFramesInBuffer = framesCapacityInBuffer * targetBufferFillRatio;
+    double errorMeasure = (targetFramesInBuffer - framesAvailableInBuffer) / framesCapacityInBuffer;
 
     errorIntegral += errorMeasure * dt;
 
@@ -228,6 +234,18 @@ void Audio::maybeLogDiagnosticsLocked(
     double dynamicBufferFactor,
     bool force
 ) {
+#if !DIAGNOSTIC_LOGGING
+    (void) event;
+    (void) writeRequestedFrames;
+    (void) writeAcceptedFrames;
+    (void) readRequestedFrames;
+    (void) readActualFrames;
+    (void) outputFrames;
+    (void) dynamicBufferFactor;
+    (void) force;
+    return;
+#endif
+
     auto now = DiagnosticClock::now();
     bool partialWrite =
         writeRequestedFrames >= 0 &&

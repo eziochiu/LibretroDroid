@@ -112,6 +112,17 @@ void LibretroDroid::maybeLogPerformanceDiagnostics(
     PerformanceClock::duration waitDuration,
     bool renderedOutsideRetroRun
 ) {
+#if !DIAGNOSTIC_LOGGING
+    (void) requestedRunFrames;
+    (void) executedRunFrames;
+    (void) stepDuration;
+    (void) retroRunDuration;
+    (void) renderDuration;
+    (void) waitDuration;
+    (void) renderedOutsideRetroRun;
+    return;
+#endif
+
     auto now = PerformanceClock::now();
 
     if (performanceWindowStart == PerformanceClock::time_point::min()) {
@@ -722,6 +733,7 @@ void LibretroDroid::afterGameLoad() {
     double timeStretchFactor = fpsSync->getTimeStretchFactor();
     double inputSampleRate = system_av_info.timing.sample_rate * timeStretchFactor;
 
+#if DIAGNOSTIC_LOGGING
     __android_log_print(
         ANDROID_LOG_INFO,
         MODULE_NAME,
@@ -734,6 +746,7 @@ void LibretroDroid::afterGameLoad() {
         preferLowLatencyAudio,
         audioSyncEnabled
     );
+#endif
 
     audio = std::make_unique<Audio>(
         (int32_t) std::lround(inputSampleRate),

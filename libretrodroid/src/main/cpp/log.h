@@ -22,6 +22,7 @@
 
 #define VERBOSE_LOGGING false
 #define GLES_LOGGING false
+#define DIAGNOSTIC_LOGGING false
 
 #if GLES_LOGGING
 #include <EGL/egl.h>
