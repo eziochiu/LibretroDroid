@@ -23,6 +23,7 @@
 #include <EGL/egl.h>
 
 #include <chrono>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
