@@ -20,7 +20,6 @@
 #include "audio.h"
 #include <android/log.h>
 #include <cmath>
-#include <cstring>
 #include <memory>
 
 namespace libretrodroid {
@@ -168,15 +167,6 @@ oboe::DataCallbackResult Audio::onAudioReady(oboe::AudioStream *oboeStream, void
 
     int32_t fifoFramesRequested = currentFramesToSubmit * 2;
     int32_t fifoFramesRead = fifoBuffer->readNow(temporaryAudioBuffer.get(), fifoFramesRequested);
-
-    // underrun 时将未读到的部分清零，防止 resampler 读取垃圾数据导致爆音
-    if (fifoFramesRead < fifoFramesRequested) {
-        memset(
-            temporaryAudioBuffer.get() + fifoFramesRead,
-            0,
-            (fifoFramesRequested - fifoFramesRead) * sizeof(int16_t)
-        );
-    }
 
     auto outputArray = reinterpret_cast<int16_t *>(audioData);
     resampler.resample(temporaryAudioBuffer.get(), currentFramesToSubmit, outputArray, numFrames);
