@@ -22,6 +22,7 @@
 
 #include <EGL/egl.h>
 
+#include <atomic>
 #include <chrono>
 #include <memory>
 #include <mutex>
@@ -151,6 +152,7 @@ private:
     void updateAudioSampleRateMultiplier();
     float findDefaultAspectRatio(const retro_system_av_info &system_av_info);
     void afterGameLoad();
+    void runCoreFrames(unsigned frames);
     void resetPerformanceDiagnostics();
     void maybeLogPerformanceDiagnostics(
         unsigned requestedRunFrames,
@@ -191,7 +193,7 @@ private:
     ImmersiveMode::Config immersiveModeConfig {};
 
     float defaultAspectRatio = 1.0;
-    bool dirtyVideo = false;
+    std::atomic<bool> dirtyVideo = false;
 
     std::unique_ptr<Core> core;
     std::unique_ptr<Audio> audio;
@@ -213,6 +215,7 @@ private:
     PerformanceClock::duration performanceTotalRenderDuration {};
     PerformanceClock::duration performanceTotalWaitDuration {};
     PerformanceClock::duration performanceMaxStepDuration {};
+    std::mutex coreMutex;
 };
 
 } //namespace libretrodroid
