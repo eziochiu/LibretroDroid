@@ -22,7 +22,6 @@
 
 #include <EGL/egl.h>
 
-#include <atomic>
 #include <chrono>
 #include <memory>
 #include <mutex>
@@ -141,7 +140,6 @@ public:
 
     float getCurrentFPS();
     float getContentRefreshRate();
-    bool usesContentRenderScheduler() const;
 
     void handleVideoRefresh(const void *data, unsigned width, unsigned height, size_t pitch);
     size_t handleAudioCallback(const int16_t* data, size_t frames);
@@ -152,7 +150,6 @@ private:
     void updateAudioSampleRateMultiplier();
     float findDefaultAspectRatio(const retro_system_av_info &system_av_info);
     void afterGameLoad();
-    void runCoreFrames(unsigned frames);
     void resetPerformanceDiagnostics();
     void maybeLogPerformanceDiagnostics(
         unsigned requestedRunFrames,
@@ -179,7 +176,6 @@ private:
     bool preferLowLatencyAudio = false;
     bool rumbleEnabled = false;
     double contentRefreshRate = 60.0;
-    bool useContentRenderScheduler = false;
 
     ShaderManager::Config fragmentShaderConfig = ShaderManager::Config {
         ShaderManager::Type::SHADER_DEFAULT, { }
@@ -193,7 +189,7 @@ private:
     ImmersiveMode::Config immersiveModeConfig {};
 
     float defaultAspectRatio = 1.0;
-    std::atomic<bool> dirtyVideo = false;
+    bool dirtyVideo = false;
 
     std::unique_ptr<Core> core;
     std::unique_ptr<Audio> audio;
@@ -215,7 +211,6 @@ private:
     PerformanceClock::duration performanceTotalRenderDuration {};
     PerformanceClock::duration performanceTotalWaitDuration {};
     PerformanceClock::duration performanceMaxStepDuration {};
-    std::mutex coreMutex;
 };
 
 } //namespace libretrodroid

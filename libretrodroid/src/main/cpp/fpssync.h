@@ -28,33 +28,19 @@ typedef std::chrono::duration<long, std::micro> Duration;
 
 class FPSSync {
 public:
-    enum class TimingMode {
-        DisplayVsync,
-        ContentClock,
-    };
-
-    static bool shouldUseDisplayVsync(double contentRefreshRate, double screenRefreshRate);
-
-    FPSSync(
-        double contentRefreshRate,
-        double screenRefreshRate,
-        TimingMode timingMode,
-        bool externallyPaced = false
-    );
+    FPSSync(double contentRefreshRate, double screenRefreshRate);
     ~FPSSync() { }
 
     void reset();
     unsigned advanceFrames();
     void wait();
     double getTimeStretchFactor();
-    bool usesContentClock() const;
 private:
 
     double screenRefreshRate;
     double contentRefreshRate;
-    TimingMode timingMode;
-    bool externallyPaced;
-    static constexpr double DISPLAY_VSYNC_RELATIVE_TOLERANCE = 0.01;
+    bool useVSync;
+    const double FPS_TOLERANCE = 2;
 
     const TimePoint MIN_TIME = TimePoint::min();
     void start();

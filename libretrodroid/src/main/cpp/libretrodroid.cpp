@@ -195,7 +195,6 @@ void LibretroDroid::resetGlobalVariables() {
     fpsSync = nullptr;
     input = nullptr;
     rumble = nullptr;
-    useContentRenderScheduler = false;
     resetPerformanceDiagnostics();
 }
 
@@ -212,7 +211,6 @@ int LibretroDroid::currentDisk() {
 }
 
 void LibretroDroid::changeDisk(unsigned int index) {
-    std::lock_guard<std::mutex> lock(coreMutex);
     if (Environment::getInstance().getRetroDiskControlCallback() == nullptr) {
         LOGE("Cannot swap disk. This platform does not support it.");
         return;
@@ -243,17 +241,14 @@ std::vector<std::vector<struct Controller>> LibretroDroid::getControllers() {
 }
 
 void LibretroDroid::setControllerType(unsigned int port, unsigned int type) {
-    std::lock_guard<std::mutex> lock(coreMutex);
     core->retro_set_controller_port_device(port, type);
 }
 
 bool LibretroDroid::unserializeState(int8_t *data, size_t size) {
-    std::lock_guard<std::mutex> lock(coreMutex);
     return core->retro_unserialize(data, size);
 }
 
 JNIEXPORT jboolean JNICALL LibretroDroid::unserializeSRAM(int8_t* data, size_t size) {
-    std::lock_guard<std::mutex> lock(coreMutex);
     size_t sramSize = core->retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
     void *sramState = core->retro_get_memory_data(RETRO_MEMORY_SAVE_RAM);
 
@@ -273,7 +268,6 @@ JNIEXPORT jboolean JNICALL LibretroDroid::unserializeSRAM(int8_t* data, size_t s
 }
 
 std::pair<int8_t*, size_t> LibretroDroid::serializeSRAM() {
-    std::lock_guard<std::mutex> lock(coreMutex);
     size_t size = core->retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
     auto* data = new int8_t[size];
     memcpy(data, (int8_t*) core->retro_get_memory_data(RETRO_MEMORY_SAVE_RAM), size);
@@ -552,11 +546,12 @@ void LibretroDroid::step() {
         requestedFrames = fpsSync->advanceFrames();
 
         // If the application runs too slow it's better to just skip those frames.
-        frames = std::min(requestedFrames, 2u);
+        frames = std::min(requestedFrames, 3u);
     }
 
     auto retroRunStart = PerformanceClock::now();
-    runCoreFrames(frames * frameSpeed);
+    for (size_t i = 0; i < frames * frameSpeed; i++)
+        core->retro_run();
     auto retroRunDuration = PerformanceClock::now() - retroRunStart;
 
     auto renderDuration = PerformanceClock::duration::zero();
@@ -699,12 +694,10 @@ uintptr_t LibretroDroid::handleGetCurrentFrameBuffer() {
 }
 
 void LibretroDroid::reset() {
-    std::lock_guard<std::mutex> lock(coreMutex);
     core->retro_reset();
 }
 
 std::pair<int8_t*, size_t> LibretroDroid::serializeState() {
-    std::lock_guard<std::mutex> lock(coreMutex);
     size_t size = core->retro_serialize_size();
     auto data = new int8_t[size];
 
@@ -714,17 +707,15 @@ std::pair<int8_t*, size_t> LibretroDroid::serializeState() {
 }
 
 void LibretroDroid::resetCheat() {
-    std::lock_guard<std::mutex> lock(coreMutex);
     core->retro_cheat_reset();
 }
 
 void LibretroDroid::setCheat(unsigned index, bool enabled, const std::string& code) {
-    std::lock_guard<std::mutex> lock(coreMutex);
     core->retro_cheat_set(index, enabled, Utils::cloneToCString(code));
 }
 
 bool LibretroDroid::requiresVideoRefresh() const {
-    return dirtyVideo.load();
+    return dirtyVideo;
 }
 
 void LibretroDroid::clearRequiresVideoRefresh() {
@@ -736,20 +727,7 @@ void LibretroDroid::afterGameLoad() {
     core->retro_get_system_av_info(&system_av_info);
 
     contentRefreshRate = system_av_info.timing.fps;
-    bool hardwareAccelerated = Environment::getInstance().isUseHwAcceleration();
-    useContentRenderScheduler = !hardwareAccelerated;
-
-    auto timingMode = FPSSync::TimingMode::ContentClock;
-    if (hardwareAccelerated && FPSSync::shouldUseDisplayVsync(system_av_info.timing.fps, screenRefreshRate)) {
-        timingMode = FPSSync::TimingMode::DisplayVsync;
-    }
-
-    fpsSync = std::make_unique<FPSSync>(
-        system_av_info.timing.fps,
-        screenRefreshRate,
-        timingMode,
-        useContentRenderScheduler
-    );
+    fpsSync = std::make_unique<FPSSync>(system_av_info.timing.fps, screenRefreshRate);
     resetPerformanceDiagnostics();
 
     double timeStretchFactor = fpsSync->getTimeStretchFactor();
@@ -773,7 +751,7 @@ void LibretroDroid::afterGameLoad() {
     audio = std::make_unique<Audio>(
         (int32_t) std::lround(inputSampleRate),
         system_av_info.timing.fps,
-        preferLowLatencyAudio && hardwareAccelerated
+        preferLowLatencyAudio
     );
 
     // 应用 AudioSync 配置
@@ -810,7 +788,6 @@ void LibretroDroid::setViewport(Rect viewportRect) {
 // 获取当前FPS(从libretro core)
 float LibretroDroid::getCurrentFPS() {
     if (core) {
-        std::lock_guard<std::mutex> lock(coreMutex);
         struct retro_system_av_info system_av_info {};
         core->retro_get_system_av_info(&system_av_info);
         return static_cast<float>(system_av_info.timing.fps);
@@ -821,16 +798,11 @@ float LibretroDroid::getCurrentFPS() {
 // 获取内容刷新率(从libretro core)
 float LibretroDroid::getContentRefreshRate() {
     if (core) {
-        std::lock_guard<std::mutex> lock(coreMutex);
         struct retro_system_av_info system_av_info {};
         core->retro_get_system_av_info(&system_av_info);
         return static_cast<float>(system_av_info.timing.fps);
     }
     return 0.0f;
-}
-
-bool LibretroDroid::usesContentRenderScheduler() const {
-    return useContentRenderScheduler;
 }
 
 } //namespace libretrodroid

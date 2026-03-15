@@ -15,7 +15,6 @@
  *     along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include <algorithm>
 #include <cmath>
 #include "fpssync.h"
 #include "log.h"
@@ -23,42 +22,29 @@
 namespace libretrodroid {
 
 unsigned FPSSync::advanceFrames() {
-    if (timingMode == TimingMode::DisplayVsync) return 1;
+    if (useVSync) return 1;
 
     if (lastFrame == MIN_TIME) {
         start();
-        return 1;
     }
 
     auto now = std::chrono::steady_clock::now();
-    auto frames = std::clamp<long long>((now - lastFrame) / sampleInterval, 1, 2);
+    auto frames = std::max((now - lastFrame) / sampleInterval, (long long) 1);
     lastFrame = lastFrame + sampleInterval * frames;
 
     return frames;
 }
 
-FPSSync::FPSSync(
-    double contentRefreshRate,
-    double screenRefreshRate,
-    TimingMode timingMode,
-    bool externallyPaced
-) {
+FPSSync::FPSSync(double contentRefreshRate, double screenRefreshRate) {
     this->contentRefreshRate = contentRefreshRate;
     this->screenRefreshRate = screenRefreshRate;
-    this->timingMode = timingMode;
-    this->externallyPaced = externallyPaced;
+    this->useVSync = std::abs(contentRefreshRate - screenRefreshRate) < FPS_TOLERANCE;
     this->sampleInterval = std::chrono::microseconds((long) ((1000000L / contentRefreshRate)));
     reset();
 }
 
 void FPSSync::start() {
-    LOGI(
-        "Starting game with fps %f on a screen with refresh rate %f. Timing mode: %d. Externally paced: %d",
-        contentRefreshRate,
-        screenRefreshRate,
-        timingMode == TimingMode::DisplayVsync ? 0 : 1,
-        externallyPaced
-    );
+    LOGI("Starting game with fps %f on a screen with refresh rate %f. Using vsync: %d", contentRefreshRate, screenRefreshRate, useVSync);
     lastFrame = std::chrono::steady_clock::now();
 }
 
@@ -67,22 +53,12 @@ void FPSSync::reset() {
 }
 
 double FPSSync::getTimeStretchFactor() {
-    return timingMode == TimingMode::DisplayVsync ? contentRefreshRate / screenRefreshRate : 1.0;
+    return useVSync ? contentRefreshRate / screenRefreshRate : 1.0;
 }
 
 void FPSSync::wait() {
-    if (timingMode == TimingMode::DisplayVsync || externallyPaced) return;
+    if (useVSync) return;
     std::this_thread::sleep_until(lastFrame);
-}
-
-bool FPSSync::usesContentClock() const {
-    return timingMode == TimingMode::ContentClock;
-}
-
-bool FPSSync::shouldUseDisplayVsync(double contentRefreshRate, double screenRefreshRate) {
-    double relativeDifference = std::abs(contentRefreshRate - screenRefreshRate) /
-        std::max(contentRefreshRate, screenRefreshRate);
-    return relativeDifference < DISPLAY_VSYNC_RELATIVE_TOLERANCE;
 }
 
 } //namespace libretrodroid
