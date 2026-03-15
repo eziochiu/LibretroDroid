@@ -53,7 +53,7 @@ void FPSSync::reset() {
 }
 
 double FPSSync::getTimeStretchFactor() {
-    return useVSync ? contentRefreshRate / screenRefreshRate : 1.0;
+    return useVSync ? screenRefreshRate / contentRefreshRate : 1.0;
 }
 
 void FPSSync::wait() {
