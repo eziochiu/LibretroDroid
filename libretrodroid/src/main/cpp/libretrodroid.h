@@ -22,30 +22,30 @@
 
 #include <EGL/egl.h>
 
-#include <string>
-#include <vector>
-#include <unordered_set>
-#include <mutex>
-#include <memory>
-#include <optional>
 #include <chrono>
+#include <memory>
+#include <mutex>
+#include <optional>
+#include <string>
+#include <unordered_set>
+#include <vector>
 
-#include "log.h"
-#include "core.h"
 #include "audio.h"
-#include "video.h"
-#include "renderers/renderer.h"
+#include "core.h"
+#include "environment.h"
 #include "fpssync.h"
 #include "input.h"
+#include "log.h"
+#include "renderers/es2/imagerendereres2.h"
+#include "renderers/es3/framebufferrenderer.h"
+#include "renderers/es3/imagerendereres3.h"
+#include "renderers/renderer.h"
 #include "rumble.h"
 #include "shadermanager.h"
 #include "utils/javautils.h"
-#include "environment.h"
-#include "vfs/vfsfile.h"
-#include "renderers/es3/framebufferrenderer.h"
-#include "renderers/es2/imagerendereres2.h"
-#include "renderers/es3/imagerendereres3.h"
 #include "utils/rect.h"
+#include "vfs/vfsfile.h"
+#include "video.h"
 
 namespace libretrodroid {
 
@@ -138,12 +138,9 @@ public:
 
     void resetGlobalVariables();
 
-    // 获取当前FPS
     float getCurrentFPS();
-    // 获取内容刷新率
     float getContentRefreshRate();
 
-    // Handle callbacks
     void handleVideoRefresh(const void *data, unsigned width, unsigned height, size_t pitch);
     size_t handleAudioCallback(const int16_t* data, size_t frames);
     int16_t handleSetInputState(unsigned port, unsigned device, unsigned index, unsigned id);
@@ -175,7 +172,7 @@ protected:
 private:
     unsigned int frameSpeed = 1;
     bool audioEnabled = true;
-    bool audioSyncEnabled = true;  // AudioSync 默认启用
+    bool audioSyncEnabled = true;
     bool preferLowLatencyAudio = false;
     bool rumbleEnabled = false;
     double contentRefreshRate = 60.0;
@@ -200,10 +197,8 @@ private:
     std::unique_ptr<FPSSync> fpsSync;
     std::unique_ptr<Input> input;
     std::unique_ptr<Rumble> rumble;
-    // Performance diagnostics split retro_run, render, and wait time.
-    using PerformanceClock = std::chrono::steady_clock;
 
-    // 性能诊断：拆分 retro_run、独立渲染和 wait 耗时，定位卡顿来源。
+    // Performance diagnostics split retro_run, render, and wait time.
     using PerformanceClock = std::chrono::steady_clock;
     PerformanceClock::time_point performanceWindowStart = PerformanceClock::time_point::min();
     uint64_t performanceStepCalls = 0;
