@@ -137,8 +137,7 @@ void Audio::waitForSpace(size_t neededSamples) {
         int32_t available = fifoBuffer->getFullFramesAvailable() * 2;
         int32_t freeSpace = capacity - available;
 
-        return freeSpace >= (int32_t)neededSamples &&
-               static_cast<double>(available) < static_cast<double>(capacity) * maxBufferFillRatioForWrite;
+        return freeSpace >= (int32_t)neededSamples && (available * 100 / capacity) < 75;
     });
 }
 
@@ -203,9 +202,8 @@ double Audio::computeDynamicBufferConversionFactor(double dt) {
     double framesCapacityInBuffer = fifoBuffer->getBufferCapacityInFrames();
     double framesAvailableInBuffer = fifoBuffer->getFullFramesAvailable();
 
-    // Bias the controller toward a fuller FIFO so short retro_run stalls do not immediately crackle.
-    double targetFramesInBuffer = framesCapacityInBuffer * targetBufferFillRatio;
-    double errorMeasure = (targetFramesInBuffer - framesAvailableInBuffer) / framesCapacityInBuffer;
+    // Error is represented by normalized distance to half buffer utilization. Range [-1.0, 1.0]
+    double errorMeasure = (framesCapacityInBuffer - 2.0f * framesAvailableInBuffer) / framesCapacityInBuffer;
 
     errorIntegral += errorMeasure * dt;
 

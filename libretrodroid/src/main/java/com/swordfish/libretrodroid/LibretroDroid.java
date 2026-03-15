@@ -145,6 +145,7 @@ public class LibretroDroid {
 
     public static native float getCurrentFPS();
     public static native float getContentRefreshRate();
+    public static native boolean usesContentRenderScheduler();
     public static native float getAspectRatio();
     public static native float[] getContentBounds();
 }

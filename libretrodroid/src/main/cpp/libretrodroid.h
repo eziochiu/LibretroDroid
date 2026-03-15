@@ -140,6 +140,7 @@ public:
 
     float getCurrentFPS();
     float getContentRefreshRate();
+    bool usesContentRenderScheduler() const;
 
     void handleVideoRefresh(const void *data, unsigned width, unsigned height, size_t pitch);
     size_t handleAudioCallback(const int16_t* data, size_t frames);
@@ -176,6 +177,7 @@ private:
     bool preferLowLatencyAudio = false;
     bool rumbleEnabled = false;
     double contentRefreshRate = 60.0;
+    bool useContentRenderScheduler = false;
 
     ShaderManager::Config fragmentShaderConfig = ShaderManager::Config {
         ShaderManager::Type::SHADER_DEFAULT, { }

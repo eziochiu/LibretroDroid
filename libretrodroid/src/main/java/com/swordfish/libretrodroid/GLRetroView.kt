@@ -23,6 +23,7 @@ import android.graphics.PointF
 import android.graphics.RectF
 import android.opengl.GLSurfaceView
 import android.util.Log
+import android.view.Choreographer
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -39,6 +40,7 @@ import java.util.concurrent.CountDownLatch
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 import kotlin.properties.Delegates
+import kotlin.math.roundToLong
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -72,6 +74,10 @@ class GLRetroView(
     private var isGameLoaded = false
     private var isEmulationReady = false
     private var isAborted = false
+    private var useContentRenderScheduler = false
+    private var contentFrameIntervalNanos = 0L
+    private var nextContentFrameAtNanos = 0L
+    private var isContentFrameCallbackPosted = false
 
     private val retroGLEventsSubject = MutableSharedFlow<GLRetroEvents>(1)
     private val retroGLIssuesErrors = MutableSharedFlow<Int>(1)
@@ -80,11 +86,44 @@ class GLRetroView(
 
     private var lifecycle: Lifecycle? = null
 
+    private val contentFrameCallback =
+        Choreographer.FrameCallback { frameTimeNanos ->
+            isContentFrameCallbackPosted = false
+            if (!useContentRenderScheduler || !isEmulationReady) {
+                return@FrameCallback
+            }
+
+            if (contentFrameIntervalNanos <= 0L) {
+                requestRender()
+                postContentFrameCallback()
+                return@FrameCallback
+            }
+
+            if (nextContentFrameAtNanos == 0L) {
+                nextContentFrameAtNanos = frameTimeNanos + contentFrameIntervalNanos
+                postContentFrameCallback()
+                return@FrameCallback
+            }
+
+            var shouldRender = false
+            while (frameTimeNanos >= nextContentFrameAtNanos) {
+                shouldRender = true
+                nextContentFrameAtNanos += contentFrameIntervalNanos
+            }
+
+            if (shouldRender) {
+                requestRender()
+            }
+
+            postContentFrameCallback()
+        }
+
     init {
         openGLESVersion = getGLESVersion(context)
         preserveEGLContextOnPause = true
         setEGLContextClientVersion(openGLESVersion)
         setRenderer(Renderer())
+        renderMode = RENDERMODE_CONTINUOUSLY
         keepScreenOn = true
     }
 
@@ -111,6 +150,7 @@ class GLRetroView(
 
     @OnLifecycleEvent(Lifecycle.Event.ON_DESTROY)
     fun onDestroy() = catchExceptions {
+        stopContentFrameScheduler()
         LibretroDroid.destroy()
         lifecycle = null
     }
@@ -236,6 +276,63 @@ class GLRetroView(
         return if (activityManager.deviceConfigurationInfo.reqGlEsVersion >= 0x30000) { 3 } else { 2 }
     }
 
+    private fun updateRenderSchedulingMode() {
+        useContentRenderScheduler = LibretroDroid.usesContentRenderScheduler()
+        val contentRefreshRate = LibretroDroid.getContentRefreshRate().toDouble()
+        contentFrameIntervalNanos =
+            if (contentRefreshRate > 0.0) {
+                (1_000_000_000.0 / contentRefreshRate).roundToLong()
+            } else {
+                0L
+            }
+        if (useContentRenderScheduler && contentFrameIntervalNanos <= 0L) {
+            useContentRenderScheduler = false
+        }
+
+        KtUtils.runOnUIThread {
+            renderMode = if (useContentRenderScheduler) {
+                RENDERMODE_WHEN_DIRTY
+            } else {
+                RENDERMODE_CONTINUOUSLY
+            }
+
+            if (useContentRenderScheduler && isEmulationReady) {
+                startContentFrameScheduler()
+            } else {
+                stopContentFrameScheduler()
+            }
+        }
+    }
+
+    private fun startContentFrameScheduler() {
+        if (!useContentRenderScheduler) {
+            return
+        }
+
+        nextContentFrameAtNanos = 0L
+        requestRender()
+        postContentFrameCallback()
+    }
+
+    private fun stopContentFrameScheduler() {
+        nextContentFrameAtNanos = 0L
+        if (!isContentFrameCallbackPosted) {
+            return
+        }
+
+        Choreographer.getInstance().removeFrameCallback(contentFrameCallback)
+        isContentFrameCallbackPosted = false
+    }
+
+    private fun postContentFrameCallback() {
+        if (isContentFrameCallbackPosted) {
+            return
+        }
+
+        isContentFrameCallbackPosted = true
+        Choreographer.getInstance().postFrameCallback(contentFrameCallback)
+    }
+
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         val mappedKey = GamepadsManager.getGamepadKeyEvent(keyCode)
         val port = (event?.device?.controllerNumber ?: 0) - 1
@@ -292,13 +389,18 @@ class GLRetroView(
         @OnLifecycleEvent(Lifecycle.Event.ON_RESUME)
         private fun resume() = catchExceptions {
             LibretroDroid.resume()
+            renderMode = if (useContentRenderScheduler) RENDERMODE_WHEN_DIRTY else RENDERMODE_CONTINUOUSLY
             onResume()
             isEmulationReady = true
+            if (useContentRenderScheduler) {
+                startContentFrameScheduler()
+            }
         }
 
         @OnLifecycleEvent(Lifecycle.Event.ON_PAUSE)
         private fun pause() = catchExceptions {
             isEmulationReady = false
+            stopContentFrameScheduler()
             onPause()
             LibretroDroid.pause()
         }
@@ -337,6 +439,7 @@ class GLRetroView(
             data.gameFileBytes != null -> loadGameFromBytes(data.gameFileBytes!!)
             data.gameVirtualFiles.isNotEmpty() -> loadGameFromVirtualFiles(data.gameVirtualFiles)
         }
+        updateRenderSchedulingMode()
         data.saveRAMState?.let {
             LibretroDroid.unserializeSRAM(data.saveRAMState)
             data.saveRAMState = null

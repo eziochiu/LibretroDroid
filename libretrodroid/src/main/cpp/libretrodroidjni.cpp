@@ -623,6 +623,13 @@ JNIEXPORT jfloat JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_getConte
     return LibretroDroid::getInstance().getContentRefreshRate();
 }
 
+JNIEXPORT jboolean JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_usesContentRenderScheduler(
+    JNIEnv* env,
+    jclass obj
+) {
+    return LibretroDroid::getInstance().usesContentRenderScheduler() ? JNI_TRUE : JNI_FALSE;
+}
+
 // 获取游戏宽高比
 JNIEXPORT jfloat JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_getAspectRatio(
     JNIEnv* env,
