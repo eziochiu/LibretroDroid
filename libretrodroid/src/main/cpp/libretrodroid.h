@@ -22,6 +22,10 @@
 
 #include <EGL/egl.h>
 
+#include <chrono>
+#include <memory>
+#include <mutex>
+#include <optional>
 #include <string>
 #include <vector>
 #include <unordered_set>
