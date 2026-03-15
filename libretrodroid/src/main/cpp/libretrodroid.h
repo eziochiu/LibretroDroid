@@ -28,6 +28,7 @@
 #include <mutex>
 #include <memory>
 #include <optional>
+#include <chrono>
 
 #include "log.h"
 #include "core.h"
@@ -152,6 +153,16 @@ private:
     void updateAudioSampleRateMultiplier();
     float findDefaultAspectRatio(const retro_system_av_info &system_av_info);
     void afterGameLoad();
+    void resetPerformanceDiagnostics();
+    void maybeLogPerformanceDiagnostics(
+        unsigned requestedRunFrames,
+        unsigned executedRunFrames,
+        std::chrono::steady_clock::duration stepDuration,
+        std::chrono::steady_clock::duration retroRunDuration,
+        std::chrono::steady_clock::duration renderDuration,
+        std::chrono::steady_clock::duration waitDuration,
+        bool renderedOutsideRetroRun
+    );
 
 protected:
     static void callback_hw_video_refresh(const void *data, unsigned width, unsigned height, size_t pitch);
@@ -167,6 +178,7 @@ private:
     bool audioSyncEnabled = true;  // AudioSync 默认启用
     bool preferLowLatencyAudio = false;
     bool rumbleEnabled = false;
+    double contentRefreshRate = 60.0;
 
     ShaderManager::Config fragmentShaderConfig = ShaderManager::Config {
         ShaderManager::Type::SHADER_DEFAULT, { }
@@ -188,6 +200,22 @@ private:
     std::unique_ptr<FPSSync> fpsSync;
     std::unique_ptr<Input> input;
     std::unique_ptr<Rumble> rumble;
+    // Performance diagnostics split retro_run, render, and wait time.
+    using PerformanceClock = std::chrono::steady_clock;
+
+    // 性能诊断：拆分 retro_run、独立渲染和 wait 耗时，定位卡顿来源。
+    using PerformanceClock = std::chrono::steady_clock;
+    PerformanceClock::time_point performanceWindowStart = PerformanceClock::time_point::min();
+    uint64_t performanceStepCalls = 0;
+    uint64_t performanceRequestedRunFrames = 0;
+    uint64_t performanceExecutedRunFrames = 0;
+    uint64_t performanceSkippedRunFrames = 0;
+    uint64_t performanceSeparateRenderCalls = 0;
+    PerformanceClock::duration performanceTotalStepDuration {};
+    PerformanceClock::duration performanceTotalRetroRunDuration {};
+    PerformanceClock::duration performanceTotalRenderDuration {};
+    PerformanceClock::duration performanceTotalWaitDuration {};
+    PerformanceClock::duration performanceMaxStepDuration {};
 };
 
 } //namespace libretrodroid

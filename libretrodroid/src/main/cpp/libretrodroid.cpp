@@ -23,6 +23,7 @@
 #include <utility>
 #include <vector>
 #include <unordered_set>
+#include <algorithm>
 
 #include "libretrodroid.h"
 #include "utils/libretrodroidexception.h"
@@ -88,6 +89,93 @@ void LibretroDroid::updateAudioSampleRateMultiplier() {
     }
 }
 
+void LibretroDroid::resetPerformanceDiagnostics() {
+    performanceWindowStart = PerformanceClock::time_point::min();
+    performanceStepCalls = 0;
+    performanceRequestedRunFrames = 0;
+    performanceExecutedRunFrames = 0;
+    performanceSkippedRunFrames = 0;
+    performanceSeparateRenderCalls = 0;
+    performanceTotalStepDuration = PerformanceClock::duration::zero();
+    performanceTotalRetroRunDuration = PerformanceClock::duration::zero();
+    performanceTotalRenderDuration = PerformanceClock::duration::zero();
+    performanceTotalWaitDuration = PerformanceClock::duration::zero();
+    performanceMaxStepDuration = PerformanceClock::duration::zero();
+}
+
+void LibretroDroid::maybeLogPerformanceDiagnostics(
+    unsigned requestedRunFrames,
+    unsigned executedRunFrames,
+    PerformanceClock::duration stepDuration,
+    PerformanceClock::duration retroRunDuration,
+    PerformanceClock::duration renderDuration,
+    PerformanceClock::duration waitDuration,
+    bool renderedOutsideRetroRun
+) {
+    auto now = PerformanceClock::now();
+
+    if (performanceWindowStart == PerformanceClock::time_point::min()) {
+        performanceWindowStart = now;
+    }
+
+    performanceStepCalls++;
+    performanceRequestedRunFrames += requestedRunFrames;
+    performanceExecutedRunFrames += executedRunFrames;
+    performanceSkippedRunFrames += requestedRunFrames > executedRunFrames
+        ? (requestedRunFrames - executedRunFrames)
+        : 0;
+    performanceSeparateRenderCalls += renderedOutsideRetroRun ? 1 : 0;
+    performanceTotalStepDuration += stepDuration;
+    performanceTotalRetroRunDuration += retroRunDuration;
+    performanceTotalRenderDuration += renderDuration;
+    performanceTotalWaitDuration += waitDuration;
+    performanceMaxStepDuration = std::max(performanceMaxStepDuration, stepDuration);
+
+    auto elapsed = now - performanceWindowStart;
+    if (elapsed < std::chrono::seconds(1)) {
+        return;
+    }
+
+    auto toMilliseconds = [](PerformanceClock::duration duration) {
+        return std::chrono::duration<double, std::milli>(duration).count();
+    };
+
+    double elapsedSeconds = std::chrono::duration<double>(elapsed).count();
+    double drawFps = performanceStepCalls / elapsedSeconds;
+    double requestedRunFps = performanceRequestedRunFrames / elapsedSeconds;
+    double actualRunFps = performanceExecutedRunFrames / elapsedSeconds;
+    double targetRunFps = contentRefreshRate * frameSpeed;
+    double emulationSpeed = targetRunFps > 0.0 ? (actualRunFps / targetRunFps) * 100.0 : 0.0;
+    double averageRetroRunMs = toMilliseconds(performanceTotalRetroRunDuration) / performanceStepCalls;
+    double averageRenderMs = toMilliseconds(performanceTotalRenderDuration) / performanceStepCalls;
+    double averageWaitMs = toMilliseconds(performanceTotalWaitDuration) / performanceStepCalls;
+    double averageStepMs = toMilliseconds(performanceTotalStepDuration) / performanceStepCalls;
+    double maxStepMs = toMilliseconds(performanceMaxStepDuration);
+
+    __android_log_print(
+        ANDROID_LOG_INFO,
+        MODULE_NAME,
+        "PerfDiag[step]: contentFps=%.3f screenFps=%.3f frameSpeed=%u drawFps=%.2f requestedRunFps=%.2f actualRunFps=%.2f emuSpeed=%.1f%% "
+        "skippedRunFrames=%llu avgRetroRunMs=%.3f avgRenderMs=%.3f separateRenderCalls=%llu avgWaitMs=%.3f avgStepMs=%.3f maxStepMs=%.3f",
+        contentRefreshRate,
+        screenRefreshRate,
+        frameSpeed,
+        drawFps,
+        requestedRunFps,
+        actualRunFps,
+        emulationSpeed,
+        static_cast<unsigned long long>(performanceSkippedRunFrames),
+        averageRetroRunMs,
+        averageRenderMs,
+        static_cast<unsigned long long>(performanceSeparateRenderCalls),
+        averageWaitMs,
+        averageStepMs,
+        maxStepMs
+    );
+
+    resetPerformanceDiagnostics();
+}
+
 // TODO... Do we really need this?
 void LibretroDroid::resetGlobalVariables() {
     core = nullptr;
@@ -96,6 +184,7 @@ void LibretroDroid::resetGlobalVariables() {
     fpsSync = nullptr;
     input = nullptr;
     rumble = nullptr;
+    resetPerformanceDiagnostics();
 }
 
 int LibretroDroid::availableDisks() {
@@ -423,6 +512,7 @@ void LibretroDroid::resume() {
     input = std::make_unique<Input>();
 
     fpsSync->reset();
+    resetPerformanceDiagnostics();
     audio->start();
     refreshAspectRatio();
 }
@@ -437,23 +527,36 @@ void LibretroDroid::pause() {
 void LibretroDroid::step() {
     LOGD("Stepping into retro_run()");
 
+    auto stepStart = PerformanceClock::now();
+
     unsigned frames = 1;
+    unsigned requestedFrames = 1;
     if (fpsSync) {
-        unsigned requestedFrames = fpsSync->advanceFrames();
+        requestedFrames = fpsSync->advanceFrames();
 
         // If the application runs too slow it's better to just skip those frames.
         frames = std::min(requestedFrames, 2u);
     }
 
+    auto retroRunStart = PerformanceClock::now();
     for (size_t i = 0; i < frames * frameSpeed; i++)
         core->retro_run();
+    auto retroRunDuration = PerformanceClock::now() - retroRunStart;
 
+    auto renderDuration = PerformanceClock::duration::zero();
+    bool renderedOutsideRetroRun = false;
     if (video && !video->rendersInVideoCallback()) {
+        renderedOutsideRetroRun = true;
+        auto renderStart = PerformanceClock::now();
         video->renderFrame();
+        renderDuration = PerformanceClock::now() - renderStart;
     }
 
+    auto waitDuration = PerformanceClock::duration::zero();
     if (fpsSync) {
+        auto waitStart = PerformanceClock::now();
         fpsSync->wait();
+        waitDuration = PerformanceClock::now() - waitStart;
     }
 
     if (rumble && rumbleEnabled) {
@@ -477,6 +580,17 @@ void LibretroDroid::step() {
 
         video->updateRotation(Environment::getInstance().getScreenRotation());
     }
+
+    auto stepDuration = PerformanceClock::now() - stepStart;
+    maybeLogPerformanceDiagnostics(
+        requestedFrames * frameSpeed,
+        frames * frameSpeed,
+        stepDuration,
+        retroRunDuration,
+        renderDuration,
+        waitDuration,
+        renderedOutsideRetroRun
+    );
 }
 
 float LibretroDroid::getAspectRatio() {
@@ -601,7 +715,9 @@ void LibretroDroid::afterGameLoad() {
     struct retro_system_av_info system_av_info {};
     core->retro_get_system_av_info(&system_av_info);
 
+    contentRefreshRate = system_av_info.timing.fps;
     fpsSync = std::make_unique<FPSSync>(system_av_info.timing.fps, screenRefreshRate);
+    resetPerformanceDiagnostics();
 
     double timeStretchFactor = fpsSync->getTimeStretchFactor();
     double inputSampleRate = system_av_info.timing.sample_rate * timeStretchFactor;
