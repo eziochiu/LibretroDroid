@@ -85,7 +85,7 @@ int16_t LibretroDroid::callback_set_input_state(
 
 void LibretroDroid::updateAudioSampleRateMultiplier() {
     if (audio) {
-        audio->setPlaybackSpeed(frameSpeed.load());
+        audio->setPlaybackSpeed(frameSpeed);
     }
 }
 
@@ -155,8 +155,7 @@ void LibretroDroid::maybeLogPerformanceDiagnostics(
     double drawFps = performanceStepCalls / elapsedSeconds;
     double requestedRunFps = performanceRequestedRunFrames / elapsedSeconds;
     double actualRunFps = performanceExecutedRunFrames / elapsedSeconds;
-    unsigned currentFrameSpeed = frameSpeed.load();
-    double targetRunFps = contentRefreshRate * currentFrameSpeed;
+    double targetRunFps = contentRefreshRate * frameSpeed;
     double emulationSpeed = targetRunFps > 0.0 ? (actualRunFps / targetRunFps) * 100.0 : 0.0;
     double averageRetroRunMs = toMilliseconds(performanceTotalRetroRunDuration) / performanceStepCalls;
     double averageRenderMs = toMilliseconds(performanceTotalRenderDuration) / performanceStepCalls;
@@ -171,7 +170,7 @@ void LibretroDroid::maybeLogPerformanceDiagnostics(
         "skippedRunFrames=%llu avgRetroRunMs=%.3f avgRenderMs=%.3f separateRenderCalls=%llu avgWaitMs=%.3f avgStepMs=%.3f maxStepMs=%.3f",
         contentRefreshRate,
         screenRefreshRate,
-        currentFrameSpeed,
+        frameSpeed,
         drawFps,
         requestedRunFps,
         actualRunFps,
@@ -373,11 +372,8 @@ void LibretroDroid::create(
     skipDuplicateFrames = duplicateFrames;
     immersiveModeEnabled = GLESVersion >= 3 && immersiveModeConfig.has_value();
     this->immersiveModeConfig = immersiveModeConfig.value_or(ImmersiveMode::Config{});
-    audioEnabled.store(true);
-    frameSpeed.store(1);
-    useAsyncEmulation = false;
-    pendingSoftwareFrameReady = false;
-    pendingSoftwareFrameData.clear();
+    audioEnabled = true;
+    frameSpeed = 1;
 
     core = std::make_unique<Core>(soFilePath);
 
@@ -504,8 +500,6 @@ void LibretroDroid::loadGameFromVirtualFiles(std::vector<VFSFile> virtualFiles) 
 void LibretroDroid::destroy() {
     LOGD("Performing libretrodroid destroy");
 
-    stopEmulationThread();
-
     if (Environment::getInstance().getHwContextDestroy() != nullptr) {
         Environment::getInstance().getHwContextDestroy()();
     }
@@ -530,17 +524,12 @@ void LibretroDroid::resume() {
 
     fpsSync->reset();
     resetPerformanceDiagnostics();
-    startEmulationThreadIfNeeded();
     audio->start();
     refreshAspectRatio();
 }
 
 void LibretroDroid::pause() {
     LOGD("Performing libretrodroid pause");
-    {
-        std::lock_guard<std::mutex> lock(emulationStateMutex);
-        emulationThreadPaused = true;
-    }
     audio->stop();
 
     input = nullptr;
@@ -549,54 +538,6 @@ void LibretroDroid::pause() {
 void LibretroDroid::step() {
     LOGD("Stepping into retro_run()");
 
-    if (useAsyncEmulation) {
-        auto stepStart = PerformanceClock::now();
-        auto renderDuration = PerformanceClock::duration::zero();
-
-        uploadPendingSoftwareFrame();
-
-        if (video) {
-            auto renderStart = PerformanceClock::now();
-            video->renderFrame(true);
-            renderDuration = PerformanceClock::now() - renderStart;
-        }
-
-        {
-            std::lock_guard<std::mutex> lock(coreMutex);
-            if (rumble && rumbleEnabled) {
-                rumble->fetchFromEnvironment();
-            }
-
-            if (video && Environment::getInstance().isGameGeometryUpdated()) {
-                Environment::getInstance().clearGameGeometryUpdated();
-
-                video->updateRendererSize(
-                    Environment::getInstance().getGameGeometryWidth(),
-                    Environment::getInstance().getGameGeometryHeight()
-                );
-
-                dirtyVideo = true;
-            }
-
-            if (video && Environment::getInstance().isScreenRotationUpdated()) {
-                Environment::getInstance().clearScreenRotationUpdated();
-                video->updateRotation(Environment::getInstance().getScreenRotation());
-            }
-        }
-
-        auto stepDuration = PerformanceClock::now() - stepStart;
-        maybeLogPerformanceDiagnostics(
-            0,
-            0,
-            stepDuration,
-            PerformanceClock::duration::zero(),
-            renderDuration,
-            PerformanceClock::duration::zero(),
-            true
-        );
-        return;
-    }
-
     auto stepStart = PerformanceClock::now();
 
     unsigned frames = 1;
@@ -604,26 +545,21 @@ void LibretroDroid::step() {
     if (fpsSync) {
         requestedFrames = fpsSync->advanceFrames();
 
-        // 允许追赶最多 2 帧，避免因抖动导致模拟器永远无法追赶
-        frames = std::min(requestedFrames, 2u);
+        // If the application runs too slow it's better to just skip those frames.
+        frames = std::min(requestedFrames, 3u);
     }
 
-    auto retroRunDuration = PerformanceClock::duration::zero();
-    if (frames > 0) {
-        auto retroRunStart = PerformanceClock::now();
-        unsigned currentFrameSpeed = frameSpeed.load();
-        for (size_t i = 0; i < frames * currentFrameSpeed; i++) {
-            core->retro_run();
-        }
-        retroRunDuration = PerformanceClock::now() - retroRunStart;
-    }
+    auto retroRunStart = PerformanceClock::now();
+    for (size_t i = 0; i < frames * frameSpeed; i++)
+        core->retro_run();
+    auto retroRunDuration = PerformanceClock::now() - retroRunStart;
 
     auto renderDuration = PerformanceClock::duration::zero();
     bool renderedOutsideRetroRun = false;
-    if (video && (!video->rendersInVideoCallback() || frames == 0)) {
+    if (video && !video->rendersInVideoCallback()) {
         renderedOutsideRetroRun = true;
         auto renderStart = PerformanceClock::now();
-        video->renderFrame(frames == 0);
+        video->renderFrame();
         renderDuration = PerformanceClock::now() - renderStart;
     }
 
@@ -657,10 +593,9 @@ void LibretroDroid::step() {
     }
 
     auto stepDuration = PerformanceClock::now() - stepStart;
-    unsigned currentFrameSpeed = frameSpeed.load();
     maybeLogPerformanceDiagnostics(
-        requestedFrames * currentFrameSpeed,
-        frames * currentFrameSpeed,
+        requestedFrames * frameSpeed,
+        frames * frameSpeed,
         stepDuration,
         retroRunDuration,
         renderDuration,
@@ -694,12 +629,12 @@ bool LibretroDroid::isRumbleEnabled() const {
 }
 
 void LibretroDroid::setFrameSpeed(unsigned int speed) {
-    frameSpeed.store(speed);
+    frameSpeed = speed;
     updateAudioSampleRateMultiplier();
 }
 
 void LibretroDroid::setAudioEnabled(bool enabled) {
-    audioEnabled.store(enabled);
+    audioEnabled = enabled;
 }
 
 void LibretroDroid::setAudioSyncEnabled(bool enabled) {
@@ -723,20 +658,6 @@ void LibretroDroid::handleVideoRefresh(
     unsigned int height,
     size_t pitch
 ) {
-    if (useAsyncEmulation) {
-        if (data != nullptr) {
-            size_t frameSize = pitch * height;
-            std::lock_guard<std::mutex> lock(pendingSoftwareFrameMutex);
-            pendingSoftwareFrameData.resize(frameSize);
-            memcpy(pendingSoftwareFrameData.data(), data, frameSize);
-            pendingSoftwareFrameWidth = width;
-            pendingSoftwareFrameHeight = height;
-            pendingSoftwareFramePitch = pitch;
-            pendingSoftwareFrameReady = true;
-        }
-        return;
-    }
-
     if (video) {
         video->onNewFrame(data, width, height, pitch);
 
@@ -747,7 +668,7 @@ void LibretroDroid::handleVideoRefresh(
 }
 
 size_t LibretroDroid::handleAudioCallback(const int16_t *data, size_t frames) {
-    if (audio && audioEnabled.load()) {
+    if (audio && audioEnabled) {
         audio->write(data, frames);
     }
     return frames;
@@ -807,19 +728,20 @@ void LibretroDroid::afterGameLoad() {
 
     contentRefreshRate = system_av_info.timing.fps;
     fpsSync = std::make_unique<FPSSync>(system_av_info.timing.fps, screenRefreshRate);
-    useAsyncEmulation = shouldUseAsyncEmulation();
     resetPerformanceDiagnostics();
 
-    double inputSampleRate = system_av_info.timing.sample_rate;
+    double timeStretchFactor = fpsSync->getTimeStretchFactor();
+    double inputSampleRate = system_av_info.timing.sample_rate * timeStretchFactor;
 
 #if DIAGNOSTIC_LOGGING
     __android_log_print(
         ANDROID_LOG_INFO,
         MODULE_NAME,
-        "AfterGameLoad: contentFps=%.6f screenRefresh=%.6f contentSampleRate=%.2f inputSampleRate=%.2f preferLowLatencyAudio=%d audioSyncEnabled=%d",
+        "AfterGameLoad: contentFps=%.6f screenRefresh=%.6f contentSampleRate=%.2f timeStretchFactor=%.6f inputSampleRate=%.2f preferLowLatencyAudio=%d audioSyncEnabled=%d",
         system_av_info.timing.fps,
         screenRefreshRate,
         system_av_info.timing.sample_rate,
+        timeStretchFactor,
         inputSampleRate,
         preferLowLatencyAudio,
         audioSyncEnabled
@@ -838,147 +760,6 @@ void LibretroDroid::afterGameLoad() {
     updateAudioSampleRateMultiplier();
 
     defaultAspectRatio = findDefaultAspectRatio(system_av_info);
-}
-
-bool LibretroDroid::shouldUseAsyncEmulation() const {
-    return fpsSync != nullptr &&
-        fpsSync->usesVSync() &&
-        !Environment::getInstance().isUseHwAcceleration() &&
-        (screenRefreshRate - contentRefreshRate) > 1.0f;
-}
-
-void LibretroDroid::startEmulationThreadIfNeeded() {
-    if (!useAsyncEmulation) {
-        return;
-    }
-
-    {
-        std::lock_guard<std::mutex> frameLock(pendingSoftwareFrameMutex);
-        pendingSoftwareFrameReady = false;
-    }
-
-    if (!emulationThread.joinable()) {
-        {
-            std::lock_guard<std::mutex> lock(emulationStateMutex);
-            emulationThreadShouldStop = false;
-            emulationThreadPaused = false;
-        }
-        emulationThread = std::thread(&LibretroDroid::emulationThreadLoop, this);
-        return;
-    }
-
-    {
-        std::lock_guard<std::mutex> lock(emulationStateMutex);
-        emulationThreadPaused = false;
-    }
-    emulationStateCondition.notify_all();
-}
-
-void LibretroDroid::stopEmulationThread() {
-    if (!emulationThread.joinable()) {
-        return;
-    }
-
-    {
-        std::lock_guard<std::mutex> lock(emulationStateMutex);
-        emulationThreadShouldStop = true;
-        emulationThreadPaused = false;
-    }
-    emulationStateCondition.notify_all();
-    emulationThread.join();
-
-    {
-        std::lock_guard<std::mutex> lock(emulationStateMutex);
-        emulationThreadShouldStop = false;
-        emulationThreadPaused = true;
-    }
-}
-
-void LibretroDroid::emulationThreadLoop() {
-    using EmulationClock = std::chrono::steady_clock;
-
-    while (true) {
-        {
-            std::unique_lock<std::mutex> lock(emulationStateMutex);
-            emulationStateCondition.wait(lock, [this] {
-                return emulationThreadShouldStop || !emulationThreadPaused;
-            });
-            if (emulationThreadShouldStop) {
-                return;
-            }
-        }
-
-        auto nextTick = EmulationClock::now();
-
-        while (true) {
-            {
-                std::lock_guard<std::mutex> lock(emulationStateMutex);
-                if (emulationThreadShouldStop) {
-                    return;
-                }
-                if (emulationThreadPaused) {
-                    break;
-                }
-            }
-
-            unsigned currentFrameSpeed = std::max(frameSpeed.load(), 1u);
-            auto tickInterval = std::chrono::duration_cast<EmulationClock::duration>(
-                std::chrono::duration<double>(1.0 / (contentRefreshRate * currentFrameSpeed))
-            );
-
-            auto now = EmulationClock::now();
-            if (nextTick > now) {
-                std::this_thread::sleep_until(nextTick);
-                now = EmulationClock::now();
-            }
-
-            auto framesDue =
-                std::max<int64_t>(
-                    1,
-                    ((now - nextTick) / tickInterval) + 1
-                );
-            auto maxFramesPerLoop = std::max<uint64_t>(3, 3ull * currentFrameSpeed);
-            auto framesToRun = static_cast<unsigned>(std::min<uint64_t>(framesDue, maxFramesPerLoop));
-
-            {
-                std::lock_guard<std::mutex> coreLock(coreMutex);
-                if (core) {
-                    for (unsigned i = 0; i < framesToRun; i++) {
-                        core->retro_run();
-                    }
-                }
-            }
-
-            nextTick += tickInterval * framesDue;
-        }
-    }
-}
-
-void LibretroDroid::uploadPendingSoftwareFrame() {
-    if (!video) {
-        return;
-    }
-
-    std::vector<uint8_t> frameData;
-    unsigned width = 0;
-    unsigned height = 0;
-    size_t pitch = 0;
-
-    {
-        std::lock_guard<std::mutex> lock(pendingSoftwareFrameMutex);
-        if (!pendingSoftwareFrameReady) {
-            return;
-        }
-        frameData.swap(pendingSoftwareFrameData);
-        width = pendingSoftwareFrameWidth;
-        height = pendingSoftwareFrameHeight;
-        pitch = pendingSoftwareFramePitch;
-        pendingSoftwareFrameReady = false;
-    }
-
-    if (!frameData.empty()) {
-        video->onNewFrame(frameData.data(), width, height, pitch);
-    }
 }
 
 float LibretroDroid::findDefaultAspectRatio(const retro_system_av_info& system_av_info) {
