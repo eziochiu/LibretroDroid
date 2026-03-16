@@ -35,6 +35,7 @@ public:
     unsigned advanceFrames();
     void wait();
     double getTimeStretchFactor();
+    bool usesVSync() const { return useVSync; }
 private:
 
     double screenRefreshRate;

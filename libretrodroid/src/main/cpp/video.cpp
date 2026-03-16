@@ -137,8 +137,8 @@ void Video::updateProgram() {
     renderer->setShaders(shaders);
 }
 
-void Video::renderFrame() {
-    if (skipDuplicateFrames && !isDirty) return;
+void Video::renderFrame(bool forcePresent) {
+    if (!forcePresent && skipDuplicateFrames && !isDirty) return;
     isDirty = false;
 
     glDisable(GL_DEPTH_TEST);

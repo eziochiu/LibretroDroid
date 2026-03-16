@@ -23,11 +23,14 @@
 #include <EGL/egl.h>
 
 #include <chrono>
+#include <condition_variable>
 #include <functional>
+#include <atomic>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
+#include <thread>
 #include <unordered_set>
 #include <vector>
 
@@ -151,6 +154,11 @@ private:
     void updateAudioSampleRateMultiplier();
     float findDefaultAspectRatio(const retro_system_av_info &system_av_info);
     void afterGameLoad();
+    bool shouldUseAsyncEmulation() const;
+    void startEmulationThreadIfNeeded();
+    void stopEmulationThread();
+    void emulationThreadLoop();
+    void uploadPendingSoftwareFrame();
     void resetPerformanceDiagnostics();
     void maybeLogPerformanceDiagnostics(
         unsigned requestedRunFrames,
@@ -171,8 +179,8 @@ protected:
     static void callback_retro_set_input_poll();
 
 private:
-    unsigned int frameSpeed = 1;
-    bool audioEnabled = true;
+    std::atomic<unsigned int> frameSpeed { 1 };
+    std::atomic<bool> audioEnabled { true };
     bool audioSyncEnabled = false;
     bool preferLowLatencyAudio = false;
     bool rumbleEnabled = false;
@@ -191,6 +199,7 @@ private:
 
     float defaultAspectRatio = 1.0;
     bool dirtyVideo = false;
+    bool useAsyncEmulation = false;
 
     std::unique_ptr<Core> core;
     std::unique_ptr<Audio> audio;
@@ -198,6 +207,20 @@ private:
     std::unique_ptr<FPSSync> fpsSync;
     std::unique_ptr<Input> input;
     std::unique_ptr<Rumble> rumble;
+
+    std::mutex coreMutex;
+    std::thread emulationThread;
+    std::mutex emulationStateMutex;
+    std::condition_variable emulationStateCondition;
+    bool emulationThreadShouldStop = false;
+    bool emulationThreadPaused = true;
+
+    std::mutex pendingSoftwareFrameMutex;
+    std::vector<uint8_t> pendingSoftwareFrameData;
+    unsigned pendingSoftwareFrameWidth = 0;
+    unsigned pendingSoftwareFrameHeight = 0;
+    size_t pendingSoftwareFramePitch = 0;
+    bool pendingSoftwareFrameReady = false;
 
     // Performance diagnostics split retro_run, render, and wait time.
     using PerformanceClock = std::chrono::steady_clock;

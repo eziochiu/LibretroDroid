@@ -48,15 +48,19 @@ bool Audio::initializeStream() {
     if (audioLatencySettings->useLowLatencyStream) {
         builder.setPerformanceMode(oboe::PerformanceMode::LowLatency);
     } else {
-        builder.setFramesPerCallback(audioBufferSize / 10);
+        builder.setFramesPerCallback(audioBufferSize / 32);
     }
 
     oboe::Result result = builder.openManagedStream(stream);
     if (result == oboe::Result::OK) {
         baseConversionFactor = (double) inputSampleRate / stream->getSampleRate();
-        fifoBuffer = std::make_unique<oboe::FifoBuffer>(2, audioBufferSize);
-        temporaryAudioBuffer = std::unique_ptr<int16_t[]>(new int16_t[audioBufferSize]);
-        latencyTuner = std::make_unique<oboe::LatencyTuner>(*stream);
+        fifoBuffer = std::make_unique<oboe::FifoBuffer>(AUDIO_BYTES_PER_FRAME, audioBufferSize);
+        temporaryAudioBuffer = std::unique_ptr<int16_t[]>(new int16_t[audioBufferSize * AUDIO_CHANNEL_COUNT]);
+        if (audioLatencySettings->useLowLatencyStream) {
+            latencyTuner = std::make_unique<oboe::LatencyTuner>(*stream);
+        } else {
+            latencyTuner = nullptr;
+        }
         maybeLogDiagnosticsLocked(
             "init",
             -1,
@@ -109,7 +113,7 @@ void Audio::stop() {
 }
 
 void Audio::write(const int16_t *data, size_t frames) {
-    int32_t fifoFramesRequested = static_cast<int32_t>(frames * 2);
+    int32_t fifoFramesRequested = static_cast<int32_t>(frames);
     if (audioSyncEnabled) {
         waitForSpace(fifoFramesRequested);
     }
@@ -135,9 +139,14 @@ void Audio::waitForSpace(size_t neededSamples) {
     bufferCondition.wait_for(lock, std::chrono::milliseconds(100), [this, neededSamples] {
         int32_t capacity = fifoBuffer->getBufferCapacityInFrames();
         int32_t available = fifoBuffer->getFullFramesAvailable();
+        if (capacity <= 0) {
+            return true;
+        }
         int32_t freeSpace = capacity - available;
+        double maxBufferedUsage = 0.75;  // 统一阈值，与目标使用率配合
 
-        return freeSpace >= (int32_t)neededSamples && (available * 100 / capacity) < 50;
+        return freeSpace >= (int32_t)neededSamples &&
+            static_cast<double>(available) <= static_cast<double>(capacity) * maxBufferedUsage;
     });
 }
 
@@ -164,7 +173,7 @@ oboe::DataCallbackResult Audio::onAudioReady(oboe::AudioStream *oboeStream, void
     int32_t currentFramesToSubmit = std::round(framesToSubmit);
     framesToSubmit -= currentFramesToSubmit;
 
-    int32_t fifoFramesRequested = currentFramesToSubmit * 2;
+    int32_t fifoFramesRequested = currentFramesToSubmit;
     int32_t fifoFramesRead = fifoBuffer->readNow(temporaryAudioBuffer.get(), fifoFramesRequested);
 
     auto outputArray = reinterpret_cast<int16_t *>(audioData);
@@ -186,7 +195,9 @@ oboe::DataCallbackResult Audio::onAudioReady(oboe::AudioStream *oboeStream, void
         );
     }
 
-    latencyTuner->tune();
+    if (latencyTuner) {
+        latencyTuner->tune();
+    }
 
     // 通知可能在等待的写入线程：缓冲区有空间了
     if (audioSyncEnabled) {
@@ -201,9 +212,15 @@ oboe::DataCallbackResult Audio::onAudioReady(oboe::AudioStream *oboeStream, void
 double Audio::computeDynamicBufferConversionFactor(double dt) {
     double framesCapacityInBuffer = fifoBuffer->getBufferCapacityInFrames();
     double framesAvailableInBuffer = fifoBuffer->getFullFramesAvailable();
+    double targetBufferUsage = 0.50;  // 统一目标半满，降低延迟
+    double targetFramesInBuffer = framesCapacityInBuffer * targetBufferUsage;
+    double normalization = std::max(targetFramesInBuffer, framesCapacityInBuffer - targetFramesInBuffer);
 
-    // Error is represented by normalized distance to half buffer utilization. Range [-1.0, 1.0]
-    double errorMeasure = (framesCapacityInBuffer - 2.0f * framesAvailableInBuffer) / framesCapacityInBuffer;
+    // 目标缓冲略高于半满，给重负载核心预留更多抖动余量。
+    double errorMeasure =
+        normalization > 0.0
+            ? (targetFramesInBuffer - framesAvailableInBuffer) / normalization
+            : 0.0;
 
     errorIntegral += errorMeasure * dt;
 

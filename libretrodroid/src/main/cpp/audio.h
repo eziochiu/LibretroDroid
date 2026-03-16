@@ -37,7 +37,8 @@ private:
         bool useLowLatencyStream;
     };
 
-    const AudioLatencySettings DEFAULT_LATENCY_SETTINGS { 8, false };
+    // 减小缓冲区：降低音频延迟，改善音画同步
+    const AudioLatencySettings DEFAULT_LATENCY_SETTINGS { 10, false };
     const AudioLatencySettings LOW_LATENCY_SETTINGS { 4, true };
 
 public:
@@ -80,9 +81,13 @@ private:
     );
 
 private:
-    const double kp = 0.006;
-    const double ki = 0.00002;
-    const double maxp = 0.003;
+    static constexpr int32_t AUDIO_CHANNEL_COUNT = 2;
+    static constexpr int32_t AUDIO_BYTES_PER_FRAME = sizeof(int16_t) * AUDIO_CHANNEL_COUNT;
+
+    // PI 控制器参数：加快缓冲区调整速度，减少音频抖动
+    const double kp = 0.010;
+    const double ki = 0.00003;
+    const double maxp = 0.005;
     const double maxi = 0.02;
 
     LinearResampler resampler;
