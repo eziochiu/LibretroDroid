@@ -173,7 +173,7 @@ protected:
 private:
     unsigned int frameSpeed = 1;
     bool audioEnabled = true;
-    bool audioSyncEnabled = true;
+    bool audioSyncEnabled = false;
     bool preferLowLatencyAudio = false;
     bool rumbleEnabled = false;
     double contentRefreshRate = 60.0;

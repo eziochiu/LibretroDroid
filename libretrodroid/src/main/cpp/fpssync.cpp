@@ -38,7 +38,8 @@ unsigned FPSSync::advanceFrames() {
 FPSSync::FPSSync(double contentRefreshRate, double screenRefreshRate) {
     this->contentRefreshRate = contentRefreshRate;
     this->screenRefreshRate = screenRefreshRate;
-    this->useVSync = std::abs(contentRefreshRate - screenRefreshRate) < FPS_TOLERANCE;
+    // this->useVSync = std::abs(contentRefreshRate - screenRefreshRate) < FPS_TOLERANCE;
+    this->useVSync = false;
     this->sampleInterval = std::chrono::microseconds((long) ((1000000L / contentRefreshRate)));
     reset();
 }

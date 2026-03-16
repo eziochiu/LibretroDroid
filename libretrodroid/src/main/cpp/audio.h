@@ -108,7 +108,7 @@ private:
     // AudioSync 支持
     std::mutex bufferMutex;
     std::condition_variable bufferCondition;
-    bool audioSyncEnabled = true;
+    bool audioSyncEnabled = false;
 
     using DiagnosticClock = std::chrono::steady_clock;
     std::mutex diagnosticsMutex;
