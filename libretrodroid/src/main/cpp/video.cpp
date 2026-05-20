@@ -294,6 +294,12 @@ Video::Video(
     printGLString("Extensions", GL_EXTENSIONS);
     initializeGLESLogCallbackIfNeeded();
 
+    EGLDisplay display = eglGetCurrentDisplay();
+    if (display != EGL_NO_DISPLAY) {
+        EGLBoolean result = eglSwapInterval(display, 1);
+        LOGI("EGL swap interval set to 1: %d", result);
+    }
+
     LOGI("Initializing graphics");
 
     glViewport(0, 0, videoLayout.getScreenWidth(), videoLayout.getScreenHeight());

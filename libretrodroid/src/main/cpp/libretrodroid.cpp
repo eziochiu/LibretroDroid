@@ -439,10 +439,7 @@ void LibretroDroid::step() {
 
     unsigned frames = 1;
     if (fpsSync) {
-        unsigned requestedFrames = fpsSync->advanceFrames();
-
-        // If the application runs too slow it's better to just skip those frames.
-        frames = std::min(requestedFrames, 2u);
+        frames = fpsSync->advanceFrames();
     }
 
     for (size_t i = 0; i < frames * frameSpeed; i++)

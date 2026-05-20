@@ -18,13 +18,7 @@
 #ifndef LIBRETRODROID_FPSSYNC_H
 #define LIBRETRODROID_FPSSYNC_H
 
-#include <chrono>
-#include <thread>
-
 namespace libretrodroid {
-
-typedef std::chrono::steady_clock::time_point TimePoint;
-typedef std::chrono::duration<long, std::micro> Duration;
 
 class FPSSync {
 public:
@@ -42,11 +36,11 @@ private:
     bool useVSync;
     const double MAX_VSYNC_SPEED_ADJUSTMENT = 0.005;
 
-    const TimePoint MIN_TIME = TimePoint::min();
     void start();
 
-    TimePoint lastFrame = MIN_TIME;
-    Duration sampleInterval;
+    bool firstFrame = true;
+    double frameAccumulator = 0.0;
+    double framesPerScreenRefresh = 1.0;
 };
 
 }
