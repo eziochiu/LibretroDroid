@@ -168,7 +168,7 @@ protected:
 private:
     unsigned int frameSpeed = 1;
     bool audioEnabled = true;
-    bool audioSyncEnabled = true;  // AudioSync 默认启用
+    bool audioSyncEnabled = false;
     bool preferLowLatencyAudio = false;
     bool rumbleEnabled = false;
 

@@ -19,6 +19,7 @@
 #define LIBRETRODROID_AUDIO_H
 
 #include <array>
+#include <chrono>
 #include <unistd.h>
 #include <oboe/Oboe.h>
 #include <oboe/FifoBuffer.h>
@@ -73,6 +74,7 @@ private:
     const double ki = 0.00002;
     const double maxp = 0.003;
     const double maxi = 0.02;
+    const std::chrono::milliseconds MAX_AUDIO_SYNC_WAIT { 2 };
 
     LinearResampler resampler;
     std::unique_ptr<oboe::FifoBuffer> fifoBuffer = nullptr;
@@ -97,7 +99,7 @@ private:
     // AudioSync 支持
     std::mutex bufferMutex;
     std::condition_variable bufferCondition;
-    bool audioSyncEnabled = true;
+    bool audioSyncEnabled = false;
 };
 
 } // namespace libretrodroid

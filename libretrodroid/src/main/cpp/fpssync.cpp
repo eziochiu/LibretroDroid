@@ -26,19 +26,26 @@ unsigned FPSSync::advanceFrames() {
 
     if (lastFrame == MIN_TIME) {
         start();
+        return 1;
     }
 
     auto now = std::chrono::steady_clock::now();
-    auto frames = std::max((now - lastFrame) / sampleInterval, (long long) 1);
+    auto elapsed = now - lastFrame;
+    if (elapsed < sampleInterval) {
+        return 0;
+    }
+
+    auto frames = elapsed / sampleInterval;
     lastFrame = lastFrame + sampleInterval * frames;
 
-    return frames;
+    return static_cast<unsigned>(frames);
 }
 
 FPSSync::FPSSync(double contentRefreshRate, double screenRefreshRate) {
     this->contentRefreshRate = contentRefreshRate;
     this->screenRefreshRate = screenRefreshRate;
-    this->useVSync = std::abs(contentRefreshRate - screenRefreshRate) < FPS_TOLERANCE;
+    double speedAdjustment = std::abs(screenRefreshRate / contentRefreshRate - 1.0);
+    this->useVSync = speedAdjustment <= MAX_VSYNC_SPEED_ADJUSTMENT;
     this->sampleInterval = std::chrono::microseconds((long) ((1000000L / contentRefreshRate)));
     reset();
 }
@@ -57,8 +64,8 @@ double FPSSync::getTimeStretchFactor() {
 }
 
 void FPSSync::wait() {
-    if (useVSync) return;
-    std::this_thread::sleep_until(lastFrame);
+    // The GL thread is already paced by EGL buffer swaps. Sleeping here can miss
+    // the next display refresh and cause visible judder on mismatched rates.
 }
 
 } //namespace libretrodroid

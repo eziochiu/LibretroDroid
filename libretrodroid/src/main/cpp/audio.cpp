@@ -106,7 +106,7 @@ void Audio::write(const int16_t *data, size_t frames) {
 
 void Audio::waitForSpace(size_t neededSamples) {
     std::unique_lock<std::mutex> lock(bufferMutex);
-    bufferCondition.wait_for(lock, std::chrono::milliseconds(100), [this, neededSamples] {
+    bufferCondition.wait_for(lock, MAX_AUDIO_SYNC_WAIT, [this, neededSamples] {
         int32_t capacity = fifoBuffer->getBufferCapacityInFrames() * 2;
         int32_t available = fifoBuffer->getFullFramesAvailable() * 2;
         int32_t freeSpace = capacity - available;

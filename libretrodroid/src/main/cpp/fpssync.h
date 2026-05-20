@@ -40,7 +40,7 @@ private:
     double screenRefreshRate;
     double contentRefreshRate;
     bool useVSync;
-    const double FPS_TOLERANCE = 5;
+    const double MAX_VSYNC_SPEED_ADJUSTMENT = 0.005;
 
     const TimePoint MIN_TIME = TimePoint::min();
     void start();
