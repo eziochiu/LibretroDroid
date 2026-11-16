@@ -137,6 +137,7 @@ public class LibretroDroid {
     public static native void onTouchEvent(float xAxis, float yAxis);
 
     public static native void onKeyEvent(int port, int action, int keyCode);
+    public static native void setAutoFireEnabled(boolean enabled);
 
     public static native void refreshAspectRatio();
 

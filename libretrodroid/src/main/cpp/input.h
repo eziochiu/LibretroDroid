@@ -29,6 +29,7 @@ class Input {
 private:
     struct GamePadState {
         std::unordered_set<int> pressedKeys;
+        std::array<unsigned int, 16> autoFireFrames{};
 
         int dpadXAxis = 0;
         int dpadYAxis = 0;
@@ -56,6 +57,8 @@ public:
 
     void onKeyEvent(unsigned int port, int action, int keyCode);
     void onMotionEvent(int port, int motionSource, float xAxis, float yAxis);
+    void setAutoFireEnabled(bool enabled);
+    void advanceFrame();
 
 private:
     const int UNKNOWN_KEY = -1;
@@ -66,6 +69,8 @@ private:
     int convertAndroidToLibretroKey(int keyCode) const;
 
     GamePadState pads[4];
+    bool autoFireEnabled = false;
+    static constexpr unsigned int AUTO_FIRE_HALF_PERIOD = 3;
 };
 
 }

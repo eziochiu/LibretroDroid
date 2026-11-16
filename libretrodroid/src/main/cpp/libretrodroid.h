@@ -107,6 +107,7 @@ public:
     void loadGameFromVirtualFiles(std::vector<VFSFile> virtualFiles);
 
     void onKeyEvent(unsigned int port, int action, int keyCode);
+    void setAutoFireEnabled(bool enabled);
     void onMotionEvent(unsigned int port, unsigned int source, float xAxis, float yAxis);
     void onTouchEvent(float xAxis, float yAxis);
 

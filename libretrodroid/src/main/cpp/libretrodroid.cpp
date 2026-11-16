@@ -243,6 +243,12 @@ void LibretroDroid::onKeyEvent(unsigned int port, int action, int keyCode) {
     }
 }
 
+void LibretroDroid::setAutoFireEnabled(bool enabled) {
+    if (input) {
+        input->setAutoFireEnabled(enabled);
+    }
+}
+
 void LibretroDroid::create(
     unsigned int GLESVersion,
     const std::string& soFilePath,
@@ -442,8 +448,11 @@ void LibretroDroid::step() {
         frames = fpsSync->advanceFrames();
     }
 
-    for (size_t i = 0; i < frames * frameSpeed; i++)
+    for (size_t i = 0; i < frames * frameSpeed; i++) {
         core->retro_run();
+        // Advance per emulated frame, including frames executed during fast-forward.
+        input->advanceFrame();
+    }
 
     if (video && (frames == 0 || !video->rendersInVideoCallback())) {
         video->renderFrame();
