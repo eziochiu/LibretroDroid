@@ -340,6 +340,14 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_onKeyEvent
     LibretroDroid::getInstance().onKeyEvent(port, action, keyCode);
 }
 
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setAutoFireEnabled(
+    JNIEnv* env,
+    jclass obj,
+    jboolean enabled
+) {
+    LibretroDroid::getInstance().setAutoFireEnabled(enabled);
+}
+
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_create(
     JNIEnv* env,
     jclass obj,

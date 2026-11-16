@@ -37,6 +37,7 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_loadGameFr
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_loadGameFromBytes(JNIEnv* env, jclass obj, jbyteArray gameFileBytes);
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_destroy(JNIEnv* env, jclass obj);
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_onKeyEvent(JNIEnv* env, jclass obj, jint port, jint action, jint keyCode);
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setAutoFireEnabled(JNIEnv* env, jclass obj, jboolean enabled);
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_onMotionEvent(JNIEnv* env, jclass obj, jint port, jint source, jfloat xAxis, jfloat yAxis);
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_onTouchEvent(JNIEnv* env, jclass obj, jfloat xAxis, jfloat yAxis);
 JNIEXPORT jfloat JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_getAspectRatio(JNIEnv* env, jclass obj);

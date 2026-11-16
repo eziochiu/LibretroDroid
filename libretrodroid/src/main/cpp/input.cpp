@@ -73,6 +73,11 @@ int16_t Input::getInputState(unsigned port, unsigned device, unsigned index, uns
                     return axis || buttons;
                 }
                 default:
+                    // Direction keys and stick axes keep their original state; only buttons pulse.
+                    if (autoFireEnabled && id < pads[port].autoFireFrames.size() &&
+                        pads[port].autoFireFrames[id] >= AUTO_FIRE_HALF_PERIOD) {
+                        return 0;
+                    }
                     return anyPressed(port, id);
             }
         }
@@ -179,15 +184,42 @@ int Input::convertAndroidToLibretroKey(int keyCode) const {
 }
 
 void Input::onKeyEvent(unsigned int port, int action, int keyCode) {
+    if (port >= 4) return;
+
     int retroKeyCode = convertAndroidToLibretroKey(keyCode);
     if (retroKeyCode == UNKNOWN_KEY) {
         return;
     }
 
     if (action == AKEY_EVENT_ACTION_DOWN) {
-        pads[port].pressedKeys.insert(retroKeyCode);
+        const bool newlyPressed = pads[port].pressedKeys.insert(retroKeyCode).second;
+        if (newlyPressed && static_cast<unsigned int>(retroKeyCode) < pads[port].autoFireFrames.size()) {
+            pads[port].autoFireFrames[retroKeyCode] = 0;
+        }
     } else if (action == AKEY_EVENT_ACTION_UP) {
         pads[port].pressedKeys.erase(retroKeyCode);
+    }
+}
+
+void Input::setAutoFireEnabled(bool enabled) {
+    if (autoFireEnabled == enabled) return;
+
+    autoFireEnabled = enabled;
+    for (auto& pad : pads) {
+        pad.autoFireFrames.fill(0);
+    }
+}
+
+void Input::advanceFrame() {
+    if (!autoFireEnabled) return;
+
+    for (auto& pad : pads) {
+        for (const auto key : pad.pressedKeys) {
+            if (static_cast<unsigned int>(key) < pad.autoFireFrames.size()) {
+                auto& frame = pad.autoFireFrames[key];
+                frame = (frame + 1) % (AUTO_FIRE_HALF_PERIOD * 2);
+            }
+        }
     }
 }
 

@@ -72,6 +72,8 @@ class GLRetroView(
     private var isGameLoaded = false
     private var isEmulationReady = false
     private var isAborted = false
+    @Volatile
+    private var autoFireEnabled = false
 
     private val retroGLEventsSubject = MutableSharedFlow<GLRetroEvents>(1)
     private val retroGLIssuesErrors = MutableSharedFlow<Int>(1)
@@ -123,6 +125,11 @@ class GLRetroView(
 
     fun sendKeyEvent(action: Int, keyCode: Int, port: Int = 0) {
         queueEvent { LibretroDroid.onKeyEvent(port, action, keyCode) }
+    }
+
+    fun setAutoFireEnabled(enabled: Boolean) {
+        autoFireEnabled = enabled
+        queueEvent { LibretroDroid.setAutoFireEnabled(enabled) }
     }
 
     fun sendMotionEvent(source: Int, xAxis: Float, yAxis: Float, port: Int = 0) {
@@ -292,6 +299,7 @@ class GLRetroView(
         @OnLifecycleEvent(Lifecycle.Event.ON_RESUME)
         private fun resume() = catchExceptions {
             LibretroDroid.resume()
+            LibretroDroid.setAutoFireEnabled(autoFireEnabled)
             onResume()
             isEmulationReady = true
         }
